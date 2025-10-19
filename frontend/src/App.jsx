@@ -1,6 +1,6 @@
-import { BrowserRouter as Router, Routes, Route, Link } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Link, Navigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
-import Dashboard from './pages/Dashboard';
+import Jobs from './pages/Jobs';
 import Gallery from './pages/Gallery';
 import Config from './pages/Config';
 import { sseClient } from './services/sse';
@@ -53,16 +53,16 @@ function App() {
               </div>
               <div className="flex items-center space-x-8">
                 <Link
-                  to="/"
-                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  Dashboard
-                </Link>
-                <Link
                   to="/gallery"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
                   Gallery
+                </Link>
+                <Link
+                  to="/jobs"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  Jobs
                 </Link>
                 <Link
                   to="/config"
@@ -81,8 +81,9 @@ function App() {
 
         <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <Routes>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/" element={<Navigate to="/gallery" replace />} />
             <Route path="/gallery" element={<Gallery />} />
+            <Route path="/jobs" element={<Jobs />} />
             <Route path="/config" element={<Config />} />
           </Routes>
         </main>
