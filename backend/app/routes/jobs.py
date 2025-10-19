@@ -128,7 +128,7 @@ async def list_jobs(
     )
     jobs = result.scalars().all()
 
-    # Get image counts for each job
+    # Get image counts and prompts file info for each job
     job_list = []
     for job in jobs:
         result = await db.execute(
@@ -136,12 +136,31 @@ async def list_jobs(
         )
         image_count = result.scalar()
 
+        # Get prompts file info
+        prompts_file_result = await db.execute(
+            select(PromptsFile).where(PromptsFile.id == job.prompts_file_id)
+        )
+        prompts_file = prompts_file_result.scalar_one_or_none()
+
+        # Count total prompts in the file
+        total_prompts = 0
+        prompts_file_name = None
+        if prompts_file:
+            prompts_file_name = prompts_file.filename
+            try:
+                with open(prompts_file.path, 'r') as f:
+                    total_prompts = len([line.strip() for line in f if line.strip()])
+            except:
+                total_prompts = 0
+
         job_list.append({
             "id": job.id,
             "status": job.status,
             "started_at": job.started_at.isoformat(),
             "finished_at": job.finished_at.isoformat() if job.finished_at else None,
             "prompts_file_id": job.prompts_file_id,
+            "prompts_file_name": prompts_file_name,
+            "total_prompts": total_prompts,
             "image_count": image_count,
             "zip_ready": job.zip_path is not None
         })
@@ -166,12 +185,31 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
     )
     image_count = result.scalar()
 
+    # Get prompts file info
+    prompts_file_result = await db.execute(
+        select(PromptsFile).where(PromptsFile.id == job.prompts_file_id)
+    )
+    prompts_file = prompts_file_result.scalar_one_or_none()
+
+    # Count total prompts in the file
+    total_prompts = 0
+    prompts_file_name = None
+    if prompts_file:
+        prompts_file_name = prompts_file.filename
+        try:
+            with open(prompts_file.path, 'r') as f:
+                total_prompts = len([line.strip() for line in f if line.strip()])
+        except:
+            total_prompts = 0
+
     response = {
         "id": job.id,
         "status": job.status,
         "started_at": job.started_at.isoformat(),
         "finished_at": job.finished_at.isoformat() if job.finished_at else None,
         "prompts_file_id": job.prompts_file_id,
+        "prompts_file_name": prompts_file_name,
+        "total_prompts": total_prompts,
         "image_count": image_count,
         "zip_ready": job.zip_path is not None
     }

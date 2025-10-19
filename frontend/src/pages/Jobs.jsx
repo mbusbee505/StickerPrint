@@ -16,16 +16,27 @@ function Jobs() {
   useEffect(() => {
     loadData();
 
+    // Handle real-time updates via SSE
     const handleJobUpdate = (data) => {
+      loadData(); // Reload all jobs when any job updates
+    };
+
+    const handleImageCreated = (data) => {
+      loadData(); // Reload to update image counts and progress
+    };
+
+    const handleZipReady = (data) => {
       loadData();
     };
 
     sseClient.on('job_updated', handleJobUpdate);
-    sseClient.on('zip_ready', handleJobUpdate);
+    sseClient.on('image_created', handleImageCreated);
+    sseClient.on('zip_ready', handleZipReady);
 
     return () => {
       sseClient.off('job_updated', handleJobUpdate);
-      sseClient.off('zip_ready', handleJobUpdate);
+      sseClient.off('image_created', handleImageCreated);
+      sseClient.off('zip_ready', handleZipReady);
     };
   }, []);
 
@@ -128,14 +139,19 @@ function Jobs() {
 
   const completedJobs = jobs.filter(j => j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled');
 
-  // Calculate progress for current job (simplified - based on image count)
+  // Calculate progress for current job - fixed calculation
   const getJobProgress = (job) => {
     if (!job) return 0;
-    // This is a rough estimate - you may want to enhance this with actual progress tracking
     if (job.status === 'succeeded') return 100;
-    if (job.status === 'queued') return 5;
-    // For running jobs, estimate based on image count (assuming typical job has ~10-50 images)
-    return Math.min(95, 10 + (job.image_count * 2));
+    if (job.status === 'queued') return 0;
+
+    // For running jobs, calculate based on actual progress
+    if (job.total_prompts && job.total_prompts > 0) {
+      return Math.round((job.image_count / job.total_prompts) * 100);
+    }
+
+    // Fallback if total_prompts not available
+    return Math.min(95, job.image_count * 10);
   };
 
   return (
@@ -201,10 +217,10 @@ function Jobs() {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-900 dark:text-white">
-                  Job #{currentJob.id}
+                  Job #{currentJob.id} - {currentJob.prompts_file_name || 'Unknown File'}
                 </p>
                 <p className="text-sm text-gray-600 dark:text-gray-400">
-                  {currentJob.image_count} images generated
+                  {currentJob.image_count} / {currentJob.total_prompts || '?'} images generated
                 </p>
               </div>
               {getStatusBadge(currentJob.status)}
@@ -294,7 +310,7 @@ function Jobs() {
                 <div className="flex-1">
                   <div className="flex items-center space-x-3">
                     <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      Job #{job.id}
+                      Job #{job.id} - {job.prompts_file_name || 'Unknown File'}
                     </p>
                     {getStatusBadge(job.status)}
                   </div>
