@@ -10,7 +10,7 @@ import shutil
 from openai import AsyncOpenAI
 from typing import Optional
 
-from ..database import get_db, AppConfig, GeneratedPromptFile, PromptsFile
+from ..database import get_db, AppConfig, GeneratedPromptFile, PromptsFile, PromptQueue
 
 router = APIRouter(prefix="/api/prompt-generator", tags=["prompt-generator"])
 
@@ -202,7 +202,7 @@ async def queue_generated_file(
     file_id: int,
     db: AsyncSession = Depends(get_db)
 ):
-    """Queue a generated prompt file for job processing"""
+    """Add a generated prompt file to the prompt queue"""
 
     # Get the generated file
     result = await db.execute(
@@ -217,25 +217,154 @@ async def queue_generated_file(
     if not source_path.exists():
         raise HTTPException(status_code=404, detail="File not found on disk")
 
+    # Check if this file is already in the prompt queue
+    existing_result = await db.execute(
+        select(PromptQueue).where(PromptQueue.generated_file_id == file_id)
+    )
+    existing_queue_item = existing_result.scalar_one_or_none()
+
+    if existing_queue_item:
+        return {
+            "id": existing_queue_item.id,
+            "filename": generated_file.filename,
+            "message": "File already in prompt queue",
+            "already_queued": True
+        }
+
+    # Add to prompt queue
+    queue_item = PromptQueue(
+        generated_file_id=file_id,
+        status='pending'
+    )
+
+    db.add(queue_item)
+    await db.commit()
+    await db.refresh(queue_item)
+
+    return {
+        "id": queue_item.id,
+        "filename": generated_file.filename,
+        "queued_at": queue_item.queued_at.isoformat(),
+        "already_queued": False
+    }
+
+
+@router.get("/queue")
+async def list_prompt_queue(db: AsyncSession = Depends(get_db)):
+    """List all items in the prompt queue"""
+    result = await db.execute(
+        select(PromptQueue)
+        .join(GeneratedPromptFile)
+        .order_by(PromptQueue.queued_at.asc())
+    )
+    queue_items = result.scalars().all()
+
+    items = []
+    for item in queue_items:
+        # Fetch the generated file details
+        file_result = await db.execute(
+            select(GeneratedPromptFile).where(GeneratedPromptFile.id == item.generated_file_id)
+        )
+        gen_file = file_result.scalar_one_or_none()
+
+        if gen_file:
+            items.append({
+                "id": item.id,
+                "generated_file_id": item.generated_file_id,
+                "filename": gen_file.filename,
+                "prompt_count": gen_file.prompt_count,
+                "user_input": gen_file.user_input,
+                "status": item.status,
+                "queued_at": item.queued_at.isoformat(),
+                "started_at": item.started_at.isoformat() if item.started_at else None,
+                "completed_at": item.completed_at.isoformat() if item.completed_at else None
+            })
+
+    return items
+
+
+@router.delete("/queue/{queue_id}")
+async def remove_from_prompt_queue(
+    queue_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Remove an item from the prompt queue"""
+    result = await db.execute(
+        select(PromptQueue).where(PromptQueue.id == queue_id)
+    )
+    queue_item = result.scalar_one_or_none()
+
+    if not queue_item:
+        raise HTTPException(status_code=404, detail="Queue item not found")
+
+    if queue_item.status == 'processing':
+        raise HTTPException(status_code=400, detail="Cannot remove item that is currently processing")
+
+    await db.delete(queue_item)
+    await db.commit()
+
+    return {"message": "Item removed from queue"}
+
+
+@router.post("/queue/process-next")
+async def process_next_in_queue(db: AsyncSession = Depends(get_db)):
+    """Process the next pending item in the prompt queue by copying it to PromptsFile"""
+
+    # Check if there's already a PromptsFile being processed
+    existing_processing = await db.execute(
+        select(PromptsFile).where(PromptsFile.status == 'processing')
+    )
+    if existing_processing.scalar_one_or_none():
+        return {
+            "message": "A file is already being processed",
+            "processed": False
+        }
+
+    # Get the next pending item from the queue
+    result = await db.execute(
+        select(PromptQueue)
+        .where(PromptQueue.status == 'pending')
+        .order_by(PromptQueue.queued_at.asc())
+        .limit(1)
+    )
+    queue_item = result.scalar_one_or_none()
+
+    if not queue_item:
+        return {
+            "message": "No pending items in queue",
+            "processed": False
+        }
+
+    # Get the generated file
+    gen_file_result = await db.execute(
+        select(GeneratedPromptFile).where(GeneratedPromptFile.id == queue_item.generated_file_id)
+    )
+    generated_file = gen_file_result.scalar_one_or_none()
+
+    if not generated_file:
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        return {
+            "message": "Generated file not found, queue item removed",
+            "processed": False
+        }
+
+    source_path = Path(generated_file.path)
+    if not source_path.exists():
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        return {
+            "message": "Generated file not found on disk, queue item removed",
+            "processed": False
+        }
+
     # Read file content for hash calculation
     with open(source_path, 'rb') as f:
         content = f.read()
 
     sha256 = hashlib.sha256(content).hexdigest()
-
-    # Check if this file is already in the prompts queue
-    existing_result = await db.execute(
-        select(PromptsFile).where(PromptsFile.sha256 == sha256)
-    )
-    existing_prompts_file = existing_result.scalar_one_or_none()
-
-    if existing_prompts_file:
-        return {
-            "id": existing_prompts_file.id,
-            "filename": existing_prompts_file.filename,
-            "message": "File already in queue",
-            "already_queued": True
-        }
 
     # Copy file to prompts directory
     prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
@@ -251,16 +380,24 @@ async def queue_generated_file(
         filename=generated_file.filename,
         sha256=sha256,
         uploaded_at=datetime.utcnow(),
-        path=str(dest_path)
+        path=str(dest_path),
+        status='pending'
     )
 
     db.add(prompts_file)
     await db.commit()
     await db.refresh(prompts_file)
 
+    # Update queue item
+    queue_item.status = 'completed'
+    queue_item.completed_at = datetime.utcnow()
+    queue_item.prompts_file_id = prompts_file.id
+
+    await db.commit()
+
     return {
-        "id": prompts_file.id,
-        "filename": prompts_file.filename,
-        "queued_at": prompts_file.uploaded_at.isoformat(),
-        "already_queued": False
+        "message": "Item processed and added to job queue",
+        "processed": True,
+        "prompts_file_id": prompts_file.id,
+        "filename": prompts_file.filename
     }

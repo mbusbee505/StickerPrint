@@ -96,6 +96,20 @@ class GeneratedPromptFile(Base):
     prompt_count = Column(Integer, default=100)
 
 
+class PromptQueue(Base):
+    __tablename__ = "prompt_queue"
+
+    id = Column(Integer, primary_key=True, index=True)
+    generated_file_id = Column(Integer, ForeignKey("generated_prompt_files.id"), nullable=False)
+    status = Column(String, default='pending')  # pending, processing, completed
+    queued_at = Column(DateTime, default=datetime.utcnow, index=True)
+    started_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    prompts_file_id = Column(Integer, ForeignKey("prompts_files.id"), nullable=True)  # Link to created PromptsFile
+
+    generated_file = relationship("GeneratedPromptFile")
+
+
 class ResearchSession(Base):
     __tablename__ = "research_sessions"
 

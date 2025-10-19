@@ -4,11 +4,13 @@ import { api } from '../services/api';
 function PromptGenerator() {
   const [userInput, setUserInput] = useState('');
   const [generatedFiles, setGeneratedFiles] = useState([]);
+  const [promptQueue, setPromptQueue] = useState([]);
+  const [promptsFiles, setPromptsFiles] = useState([]);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
   useEffect(() => {
-    loadGeneratedFiles();
+    loadAllData();
   }, []);
 
   useEffect(() => {
@@ -21,12 +23,37 @@ function PromptGenerator() {
     }
   }, [toast]);
 
-  const loadGeneratedFiles = async () => {
+  // Auto-process prompt queue when no PromptsFile is being processed
+  useEffect(() => {
+    const autoProcessQueue = async () => {
+      const processingFile = promptsFiles.find(f => f.status === 'processing');
+      const pendingQueueItem = promptQueue.find(q => q.status === 'pending');
+
+      if (!processingFile && pendingQueueItem) {
+        try {
+          await api.processNextPromptQueue();
+          await loadAllData();
+        } catch (error) {
+          console.error('Auto-process failed:', error);
+        }
+      }
+    };
+
+    autoProcessQueue();
+  }, [promptQueue, promptsFiles]);
+
+  const loadAllData = async () => {
     try {
-      const files = await api.listGeneratedPromptFiles();
+      const [files, queue, prompts] = await Promise.all([
+        api.listGeneratedPromptFiles(),
+        api.listPromptQueue(),
+        api.listPromptsFiles()
+      ]);
       setGeneratedFiles(files);
+      setPromptQueue(queue);
+      setPromptsFiles(prompts);
     } catch (error) {
-      showToast('error', 'Failed to load generated files');
+      showToast('error', 'Failed to load data');
     }
   };
 
@@ -57,8 +84,8 @@ function PromptGenerator() {
       link.click();
       document.body.removeChild(link);
 
-      // Reload file list
-      await loadGeneratedFiles();
+      // Reload data
+      await loadAllData();
 
       // Clear input
       setUserInput('');
@@ -83,13 +110,38 @@ function PromptGenerator() {
     try {
       const result = await api.queueGeneratedPromptFile(fileId);
       if (result.already_queued) {
-        showToast('error', 'File already in queue');
+        showToast('error', 'File already in prompt queue');
       } else {
-        showToast('success', `${filename} queued successfully!`);
+        showToast('success', `${filename} added to queue!`);
+        await loadAllData();
       }
     } catch (error) {
       showToast('error', error.message || 'Failed to queue file');
     }
+  };
+
+  const handleRemoveFromQueue = async (queueId, filename) => {
+    try {
+      await api.removeFromPromptQueue(queueId);
+      showToast('success', `${filename} removed from queue`);
+      await loadAllData();
+    } catch (error) {
+      showToast('error', error.message || 'Failed to remove from queue');
+    }
+  };
+
+  const getQueueStatusBadge = (status) => {
+    const colors = {
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
+      processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    };
+
+    return (
+      <span className={`px-2 py-0.5 text-xs font-medium rounded ${colors[status]}`}>
+        {status}
+      </span>
+    );
   };
 
   return (
@@ -167,57 +219,106 @@ function PromptGenerator() {
           </div>
         </div>
 
-        {/* Right Panel - Previously Generated Files */}
-        <div className="w-96 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-            Previously Generated Files ({generatedFiles.length})
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {generatedFiles.length === 0 ? (
-              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
-                No files generated yet
-              </p>
-            ) : (
-              generatedFiles.map((file) => (
-                <div
-                  key={file.id}
-                  className="p-3 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
-                >
-                  <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                        {file.filename}
+        {/* Right Panel - Queue and Previously Generated Files */}
+        <div className="w-96 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex flex-col">
+          {/* Prompt Queue Section */}
+          <div className="border-b dark:border-gray-700 p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              Prompt Queue ({promptQueue.filter(q => q.status === 'pending').length})
+            </h3>
+            <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
+              Files will be automatically sent to the job queue one at a time.
+            </p>
+            <div className="space-y-2 max-h-64 overflow-y-auto">
+              {promptQueue.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
+                  No items in queue
+                </p>
+              ) : (
+                promptQueue.map((item) => (
+                  <div
+                    key={item.id}
+                    className="p-2 bg-gray-50 dark:bg-gray-700 rounded"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-1">
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-medium text-gray-900 dark:text-white truncate">
+                          {item.filename}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          {getQueueStatusBadge(item.status)}
+                          <span className="text-xs text-gray-500 dark:text-gray-400">
+                            {item.prompt_count} prompts
+                          </span>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2 mt-1">
-                        <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
-                          {file.prompt_count} prompts
-                        </span>
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                        {new Date(file.created_at).toLocaleString()}
-                      </div>
+                      {item.status === 'pending' && (
+                        <button
+                          onClick={() => handleRemoveFromQueue(item.id, item.filename)}
+                          className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs"
+                        >
+                          Remove
+                        </button>
+                      )}
                     </div>
                   </div>
-                  <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
-                    {file.user_input}
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      onClick={() => handleDownload(file.id, file.filename)}
-                      className="flex-1 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                    >
-                      Download
-                    </button>
-                    <button
-                      onClick={() => handleQueue(file.id, file.filename)}
-                      className="flex-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
-                    >
-                      Queue
-                    </button>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Previously Generated Files Section */}
+          <div className="flex-1 overflow-hidden flex flex-col p-4">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
+              Previously Generated Files ({generatedFiles.length})
+            </h3>
+            <div className="flex-1 overflow-y-auto space-y-2">
+              {generatedFiles.length === 0 ? (
+                <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                  No files generated yet
+                </p>
+              ) : (
+                generatedFiles.map((file) => (
+                  <div
+                    key={file.id}
+                    className="p-3 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+                  >
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex-1">
+                        <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                          {file.filename}
+                        </div>
+                        <div className="flex items-center gap-2 mt-1">
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
+                            {file.prompt_count} prompts
+                          </span>
+                        </div>
+                        <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                          {new Date(file.created_at).toLocaleString()}
+                        </div>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
+                      {file.user_input}
+                    </p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => handleDownload(file.id, file.filename)}
+                        className="flex-1 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                      >
+                        Download
+                      </button>
+                      <button
+                        onClick={() => handleQueue(file.id, file.filename)}
+                        className="flex-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                      >
+                        Queue
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))
-            )}
+                ))
+              )}
+            </div>
           </div>
         </div>
       </div>

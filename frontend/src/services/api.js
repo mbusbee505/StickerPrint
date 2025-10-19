@@ -134,4 +134,26 @@ export const api = {
     if (!response.ok) throw new Error('Failed to queue file');
     return response.json();
   },
+
+  async listPromptQueue() {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/queue`);
+    if (!response.ok) throw new Error('Failed to fetch prompt queue');
+    return response.json();
+  },
+
+  async removeFromPromptQueue(queueId) {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/queue/${queueId}`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to remove from queue');
+    return response.json();
+  },
+
+  async processNextPromptQueue() {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/queue/process-next`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to process queue');
+    return response.json();
+  },
 };
