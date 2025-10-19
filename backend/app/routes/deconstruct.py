@@ -115,15 +115,11 @@ async def analyze_images(
                 model="gpt-4o",
                 messages=[
                     {
-                        "role": "system",
-                        "content": STICKER_DESIGN_SYSTEM_PROMPT
-                    },
-                    {
                         "role": "user",
                         "content": [
                             {
                                 "type": "text",
-                                "text": "Analyze this image and create a sticker design prompt based on it."
+                                "text": f"{STICKER_DESIGN_SYSTEM_PROMPT}\n\nAnalyze this image and create a sticker design prompt based on it."
                             },
                             {
                                 "type": "image_url",
@@ -146,6 +142,9 @@ async def analyze_images(
             prompts_text.append(prompt)
 
         except Exception as e:
+            import traceback
+            print(f"Error analyzing {upload_file.filename}: {str(e)}")
+            print(traceback.format_exc())
             raise HTTPException(status_code=500, detail=f"Failed to analyze {upload_file.filename}: {str(e)}")
 
     # Save results to file
