@@ -17,6 +17,26 @@ function Research() {
 
   useEffect(() => {
     loadSessionsAndRestoreState();
+
+    // Cleanup function for page unload/refresh
+    const handleBeforeUnload = () => {
+      if (eventSourceRef.current) {
+        console.log('Page unloading - closing research stream');
+        eventSourceRef.current.close();
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Cleanup on unmount or page navigation
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      if (eventSourceRef.current) {
+        console.log('Component unmounting - closing research stream');
+        eventSourceRef.current.close();
+        eventSourceRef.current = null;
+      }
+    };
   }, []);
 
   const loadSessionsAndRestoreState = async () => {
@@ -126,11 +146,14 @@ function Research() {
   };
 
   const startResearchStream = (sessionId) => {
-    // Close existing connection
+    // Close existing connection if any
     if (eventSourceRef.current) {
+      console.log('Closing existing stream before starting new one');
       eventSourceRef.current.close();
+      eventSourceRef.current = null;
     }
 
+    console.log(`Starting research stream for session ${sessionId}`);
     setIsResearching(true);
     setThinkingSteps([]);
     setCurrentStatus('Initializing...');
