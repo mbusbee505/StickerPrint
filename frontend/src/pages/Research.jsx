@@ -261,11 +261,23 @@ function Research() {
     window.open(`${API_BASE}/api/research/sessions/${sessionId}/download`, '_blank');
   };
 
-  const clearConversation = () => {
+  const clearConversation = async () => {
     // Close any active research stream
     if (eventSourceRef.current) {
       eventSourceRef.current.close();
       eventSourceRef.current = null;
+    }
+
+    // Delete the current session from database if it exists and is active
+    if (currentSession && currentSession.status === 'active') {
+      try {
+        await fetch(`${API_BASE}/api/research/sessions/${currentSession.id}`, {
+          method: 'DELETE'
+        });
+        console.log(`Deleted active session ${currentSession.id}`);
+      } catch (error) {
+        console.error('Failed to delete session:', error);
+      }
     }
 
     // Reset all state
@@ -276,6 +288,9 @@ function Research() {
     setAwaitingClarification(false);
     setIsResearching(false);
     setResearchProgress(0);
+
+    // Reload sessions to update history
+    loadSessions();
   };
 
   const deleteSession = async (sessionId) => {
@@ -521,7 +536,7 @@ function Research() {
                   className="p-3 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
                 >
                   <div className="flex items-start justify-between gap-2 mb-2">
-                    <div className="flex-1" onClick={() => loadSession(session.id)} className="cursor-pointer">
+                    <div className="flex-1 cursor-pointer" onClick={() => loadSession(session.id)}>
                       <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
                         {session.title}
                       </div>
