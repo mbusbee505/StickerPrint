@@ -79,6 +79,19 @@ function PromptGenerator() {
     document.body.removeChild(link);
   };
 
+  const handleQueue = async (fileId, filename) => {
+    try {
+      const result = await api.queueGeneratedPromptFile(fileId);
+      if (result.already_queued) {
+        showToast('error', 'File already in queue');
+      } else {
+        showToast('success', `${filename} queued successfully!`);
+      }
+    } catch (error) {
+      showToast('error', error.message || 'Failed to queue file');
+    }
+  };
+
   return (
     <>
       {/* Toast Notification */}
@@ -188,12 +201,20 @@ function PromptGenerator() {
                   <p className="text-xs text-gray-700 dark:text-gray-300 line-clamp-2 mb-2">
                     {file.user_input}
                   </p>
-                  <button
-                    onClick={() => handleDownload(file.id, file.filename)}
-                    className="w-full px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
-                  >
-                    Download
-                  </button>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDownload(file.id, file.filename)}
+                      className="flex-1 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                    >
+                      Download
+                    </button>
+                    <button
+                      onClick={() => handleQueue(file.id, file.filename)}
+                      className="flex-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                    >
+                      Queue
+                    </button>
+                  </div>
                 </div>
               ))
             )}

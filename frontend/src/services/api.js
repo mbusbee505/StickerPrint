@@ -126,4 +126,12 @@ export const api = {
   getGeneratedPromptFileUrl(fileId) {
     return `${API_BASE_URL}/prompt-generator/download/${fileId}`;
   },
+
+  async queueGeneratedPromptFile(fileId) {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/queue/${fileId}`, {
+      method: 'POST',
+    });
+    if (!response.ok) throw new Error('Failed to queue file');
+    return response.json();
+  },
 };

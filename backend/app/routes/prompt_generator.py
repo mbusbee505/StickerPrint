@@ -5,10 +5,12 @@ from pydantic import BaseModel
 from datetime import datetime
 from pathlib import Path
 import re
+import hashlib
+import shutil
 from openai import AsyncOpenAI
 from typing import Optional
 
-from ..database import get_db, AppConfig, GeneratedPromptFile
+from ..database import get_db, AppConfig, GeneratedPromptFile, PromptsFile
 
 router = APIRouter(prefix="/api/prompt-generator", tags=["prompt-generator"])
 
@@ -193,3 +195,72 @@ async def download_generated_file(
         filename=file_record.filename,
         media_type='text/plain'
     )
+
+
+@router.post("/queue/{file_id}")
+async def queue_generated_file(
+    file_id: int,
+    db: AsyncSession = Depends(get_db)
+):
+    """Queue a generated prompt file for job processing"""
+
+    # Get the generated file
+    result = await db.execute(
+        select(GeneratedPromptFile).where(GeneratedPromptFile.id == file_id)
+    )
+    generated_file = result.scalar_one_or_none()
+
+    if not generated_file:
+        raise HTTPException(status_code=404, detail="Generated file not found")
+
+    source_path = Path(generated_file.path)
+    if not source_path.exists():
+        raise HTTPException(status_code=404, detail="File not found on disk")
+
+    # Read file content for hash calculation
+    with open(source_path, 'rb') as f:
+        content = f.read()
+
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    # Check if this file is already in the prompts queue
+    existing_result = await db.execute(
+        select(PromptsFile).where(PromptsFile.sha256 == sha256)
+    )
+    existing_prompts_file = existing_result.scalar_one_or_none()
+
+    if existing_prompts_file:
+        return {
+            "id": existing_prompts_file.id,
+            "filename": existing_prompts_file.filename,
+            "message": "File already in queue",
+            "already_queued": True
+        }
+
+    # Copy file to prompts directory
+    prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = int(datetime.utcnow().timestamp())
+    dest_path = prompts_dir / f"{timestamp}_{generated_file.filename}"
+
+    shutil.copy2(source_path, dest_path)
+
+    # Create PromptsFile entry
+    prompts_file = PromptsFile(
+        filename=generated_file.filename,
+        sha256=sha256,
+        uploaded_at=datetime.utcnow(),
+        path=str(dest_path)
+    )
+
+    db.add(prompts_file)
+    await db.commit()
+    await db.refresh(prompts_file)
+
+    return {
+        "id": prompts_file.id,
+        "filename": prompts_file.filename,
+        "queued_at": prompts_file.uploaded_at.isoformat(),
+        "already_queued": False
+    }
