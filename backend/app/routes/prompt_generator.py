@@ -23,11 +23,14 @@ async def _process_next_prompt_queue_item(db):
     """Helper function to process the next item in the prompt queue"""
     from ..routes.events import broadcast_event
 
+    print("[PROMPT_QUEUE] Checking for items to process...")
+
     # Check if there's already a PromptsFile being processed
     existing_processing = await db.execute(
         select(PromptsFile).where(PromptsFile.status == 'processing')
     )
     if existing_processing.scalar_one_or_none():
+        print("[PROMPT_QUEUE] A PromptsFile is already being processed, skipping")
         return False
 
     # Get the next pending item from the queue
@@ -40,7 +43,10 @@ async def _process_next_prompt_queue_item(db):
     queue_item = result.scalar_one_or_none()
 
     if not queue_item:
+        print("[PROMPT_QUEUE] No pending items in queue")
         return False
+
+    print(f"[PROMPT_QUEUE] Processing queue item ID: {queue_item.id}")
 
     # Get the generated file
     gen_file_result = await db.execute(
@@ -98,6 +104,8 @@ async def _process_next_prompt_queue_item(db):
 
     await db.commit()
 
+    print(f"[PROMPT_QUEUE] Successfully processed queue item {queue_item.id} -> PromptsFile {prompts_file.id}")
+
     # Broadcast events
     await broadcast_event("prompt_queue_updated", {
         "action": "completed",
@@ -108,6 +116,8 @@ async def _process_next_prompt_queue_item(db):
         "prompts_file_id": prompts_file.id,
         "filename": prompts_file.filename
     })
+
+    print(f"[PROMPT_QUEUE] Broadcasted events for queue completion")
 
     return True
 
@@ -290,6 +300,25 @@ async def download_generated_file(
     )
 
 
+@router.post("/queue/process-next")
+async def process_next_in_queue(db: AsyncSession = Depends(get_db)):
+    """Process the next pending item in the prompt queue by copying it to PromptsFile"""
+    print("[PROMPT_QUEUE] Manual process-next endpoint called")
+
+    result = await _process_next_prompt_queue_item(db)
+
+    if result:
+        return {
+            "message": "Item processed and added to job queue",
+            "processed": True
+        }
+    else:
+        return {
+            "message": "No items to process or already processing",
+            "processed": False
+        }
+
+
 @router.post("/queue/{file_id}")
 async def queue_generated_file(
     file_id: int,
@@ -344,9 +373,13 @@ async def queue_generated_file(
 
     # Trigger auto-processing of the queue (import here to avoid circular import)
     try:
-        await _process_next_prompt_queue_item(db)
+        print(f"[PROMPT_QUEUE] Item queued, triggering auto-process...")
+        processed = await _process_next_prompt_queue_item(db)
+        print(f"[PROMPT_QUEUE] Auto-process result: {processed}")
     except Exception as e:
-        print(f"Error auto-processing queue: {e}")
+        print(f"[PROMPT_QUEUE] Error auto-processing queue: {e}")
+        import traceback
+        traceback.print_exc()
 
     return {
         "id": queue_item.id,
@@ -418,100 +451,3 @@ async def remove_from_prompt_queue(
     })
 
     return {"message": "Item removed from queue"}
-
-
-@router.post("/queue/process-next")
-async def process_next_in_queue(db: AsyncSession = Depends(get_db)):
-    """Process the next pending item in the prompt queue by copying it to PromptsFile"""
-
-    # Check if there's already a PromptsFile being processed
-    existing_processing = await db.execute(
-        select(PromptsFile).where(PromptsFile.status == 'processing')
-    )
-    if existing_processing.scalar_one_or_none():
-        return {
-            "message": "A file is already being processed",
-            "processed": False
-        }
-
-    # Get the next pending item from the queue
-    result = await db.execute(
-        select(PromptQueue)
-        .where(PromptQueue.status == 'pending')
-        .order_by(PromptQueue.queued_at.asc())
-        .limit(1)
-    )
-    queue_item = result.scalar_one_or_none()
-
-    if not queue_item:
-        return {
-            "message": "No pending items in queue",
-            "processed": False
-        }
-
-    # Get the generated file
-    gen_file_result = await db.execute(
-        select(GeneratedPromptFile).where(GeneratedPromptFile.id == queue_item.generated_file_id)
-    )
-    generated_file = gen_file_result.scalar_one_or_none()
-
-    if not generated_file:
-        # Clean up orphaned queue item
-        await db.delete(queue_item)
-        await db.commit()
-        return {
-            "message": "Generated file not found, queue item removed",
-            "processed": False
-        }
-
-    source_path = Path(generated_file.path)
-    if not source_path.exists():
-        # Clean up orphaned queue item
-        await db.delete(queue_item)
-        await db.commit()
-        return {
-            "message": "Generated file not found on disk, queue item removed",
-            "processed": False
-        }
-
-    # Read file content for hash calculation
-    with open(source_path, 'rb') as f:
-        content = f.read()
-
-    sha256 = hashlib.sha256(content).hexdigest()
-
-    # Copy file to prompts directory
-    prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = int(datetime.utcnow().timestamp())
-    dest_path = prompts_dir / f"{timestamp}_{generated_file.filename}"
-
-    shutil.copy2(source_path, dest_path)
-
-    # Create PromptsFile entry
-    prompts_file = PromptsFile(
-        filename=generated_file.filename,
-        sha256=sha256,
-        uploaded_at=datetime.utcnow(),
-        path=str(dest_path),
-        status='pending'
-    )
-
-    db.add(prompts_file)
-    await db.commit()
-    await db.refresh(prompts_file)
-
-    # Update queue item
-    queue_item.status = 'completed'
-    queue_item.completed_at = datetime.utcnow()
-    queue_item.prompts_file_id = prompts_file.id
-
-    await db.commit()
-
-    return {
-        "message": "Item processed and added to job queue",
-        "processed": True,
-        "prompts_file_id": prompts_file.id,
-        "filename": prompts_file.filename
-    }
