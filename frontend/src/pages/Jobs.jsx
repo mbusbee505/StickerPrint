@@ -233,7 +233,7 @@ function Jobs() {
 
       {/* Toast Notification */}
       {toast && (
-        <div className="fixed top-4 right-4 z-50 animate-slide-in">
+        <div className="fixed top-4 left-4 z-50 animate-slide-in">
           <div
             className={`px-6 py-4 rounded-lg shadow-lg ${
               toast.type === 'success'
