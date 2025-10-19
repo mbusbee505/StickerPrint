@@ -352,8 +352,40 @@ async def stream_research(
                 "data": json.dumps({"status": "finalizing", "message": "Generating final report..."})
             }
 
-            # Save the final report to file
-            filename = f"research_{session_id}_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.txt"
+            # Generate descriptive filename using GPT-4o
+            try:
+                filename_prompt = f"""Based on this research query, create a short, descriptive filename of 1-4 words that captures the topic. Use only lowercase letters, numbers, and underscores. No file extension.
+
+Query: {research_query[:500]}
+
+Examples:
+- "climate_change_impact"
+- "ai_healthcare"
+- "quantum_computing"
+- "mars_exploration"
+
+Filename:"""
+
+                filename_response = await client.chat.completions.create(
+                    model="gpt-4o",
+                    messages=[
+                        {"role": "user", "content": filename_prompt}
+                    ],
+                    max_tokens=20
+                )
+
+                filename_base = filename_response.choices[0].message.content.strip()
+                # Clean the filename to ensure it's safe
+                import re
+                filename_base = re.sub(r'[^a-z0-9_]', '', filename_base.lower())
+                if not filename_base or len(filename_base) < 2:
+                    # Fallback to session ID
+                    filename_base = f"research_{session_id}"
+            except:
+                # Fallback if GPT-4o fails
+                filename_base = f"research_{session_id}"
+
+            filename = f"{filename_base}.txt"
             filepath = RESEARCH_DIR / filename
 
             with open(filepath, 'w', encoding='utf-8') as f:
