@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../services/api';
 import { sseClient } from '../services/sse';
@@ -9,23 +9,36 @@ function Gallery() {
 
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [hoveredImage, setHoveredImage] = useState(null);
   const [toast, setToast] = useState(null);
   const [jobs, setRuns] = useState([]);
   const [selectedJob, setSelectedRun] = useState('all');
+  const [page, setPage] = useState(1);
+  const [hasMore, setHasMore] = useState(true);
+  const observerTarget = useRef(null);
 
   useEffect(() => {
-    loadImages();
+    // Reset when jobId changes
+    setImages([]);
+    setPage(1);
+    setHasMore(true);
+    loadImages(1, true);
     loadJobs();
 
     const handleImageCreated = (data) => {
       if (!jobId || data.job_id === parseInt(jobId)) {
-        loadImages();
+        setImages([]);
+        setPage(1);
+        setHasMore(true);
+        loadImages(1, true);
       }
     };
 
     const handleGalleryCleared = () => {
       setImages([]);
+      setPage(1);
+      setHasMore(true);
       showToast('success', 'Gallery cleared successfully!');
     };
 
@@ -52,14 +65,32 @@ function Gallery() {
     setToast({ type, text });
   };
 
-  const loadImages = async () => {
+  const loadImages = async (pageNum = page, reset = false) => {
+    if (!reset && !hasMore) return;
+
     try {
-      const data = await api.listImages(jobId ? parseInt(jobId) : null);
-      setImages(data);
+      if (reset) {
+        setLoading(true);
+      } else {
+        setLoadingMore(true);
+      }
+
+      const data = await api.listImages(jobId ? parseInt(jobId) : null, pageNum, 50);
+
+      if (data.length < 50) {
+        setHasMore(false);
+      }
+
+      if (reset) {
+        setImages(data);
+      } else {
+        setImages(prev => [...prev, ...data]);
+      }
     } catch (error) {
       showToast('error', 'Failed to load images');
     } finally {
       setLoading(false);
+      setLoadingMore(false);
     }
   };
 
@@ -81,6 +112,32 @@ function Gallery() {
       return api.getJobZipUrl(selectedJob);
     }
   };
+
+  // Infinite scroll observer
+  useEffect(() => {
+    const observer = new IntersectionObserver(
+      entries => {
+        if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
+          setPage(prev => {
+            const nextPage = prev + 1;
+            loadImages(nextPage, false);
+            return nextPage;
+          });
+        }
+      },
+      { threshold: 0.1 }
+    );
+
+    if (observerTarget.current) {
+      observer.observe(observerTarget.current);
+    }
+
+    return () => {
+      if (observerTarget.current) {
+        observer.unobserve(observerTarget.current);
+      }
+    };
+  }, [hasMore, loading, loadingMore]);
 
   if (loading) {
     return (
@@ -146,37 +203,49 @@ function Gallery() {
           <p className="text-gray-600 dark:text-gray-400">No images yet</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-          {images.map((image) => (
-            <div
-              key={image.id}
-              className="relative group aspect-square"
-              onMouseEnter={() => setHoveredImage(image.id)}
-              onMouseLeave={() => setHoveredImage(null)}
-            >
-              <img
-                src={image.url}
-                alt={image.prompt_text}
-                className="w-full h-full object-cover rounded-lg shadow"
-              />
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+            {images.map((image) => (
+              <div
+                key={image.id}
+                className="relative group aspect-square"
+                onMouseEnter={() => setHoveredImage(image.id)}
+                onMouseLeave={() => setHoveredImage(null)}
+              >
+                <img
+                  src={image.url}
+                  alt={image.prompt_text}
+                  className="w-full h-full object-cover rounded-lg shadow"
+                />
 
-              {hoveredImage === image.id && (
-                <div className="absolute inset-0 bg-black bg-opacity-75 rounded-lg p-4 flex flex-col justify-between">
-                  <p className="text-white text-sm overflow-y-auto">
-                    {image.prompt_text}
-                  </p>
-                  <a
-                    href={image.url}
-                    download
-                    className="mt-2 px-3 py-1 bg-white text-black rounded text-sm text-center hover:bg-gray-200"
-                  >
-                    Download
-                  </a>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+                {hoveredImage === image.id && (
+                  <div className="absolute inset-0 bg-black bg-opacity-75 rounded-lg p-4 flex flex-col justify-between">
+                    <p className="text-white text-sm overflow-y-auto">
+                      {image.prompt_text}
+                    </p>
+                    <a
+                      href={image.url}
+                      download
+                      className="mt-2 px-3 py-1 bg-white text-black rounded text-sm text-center hover:bg-gray-200"
+                    >
+                      Download
+                    </a>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Infinite scroll trigger */}
+          <div ref={observerTarget} className="w-full py-8 flex justify-center">
+            {loadingMore && (
+              <div className="text-gray-600 dark:text-gray-400">Loading more...</div>
+            )}
+            {!hasMore && images.length > 0 && (
+              <div className="text-gray-600 dark:text-gray-400">No more images</div>
+            )}
+          </div>
+        </>
       )}
     </div>
   );
