@@ -31,11 +31,11 @@ class PromptsFile(Base):
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     path = Column(String, nullable=False)
 
-    runs = relationship("Run", back_populates="prompts_file")
+    jobs = relationship("Job", back_populates="prompts_file")
 
 
-class Run(Base):
-    __tablename__ = "runs"
+class Job(Base):
+    __tablename__ = "jobs"
 
     id = Column(Integer, primary_key=True, index=True)
     status = Column(
@@ -55,8 +55,8 @@ class Run(Base):
     zip_sha256 = Column(String, nullable=True)
     zip_built_at = Column(DateTime, nullable=True)
 
-    prompts_file = relationship("PromptsFile", back_populates="runs")
-    images = relationship("Image", back_populates="run", cascade="all, delete-orphan")
+    prompts_file = relationship("PromptsFile", back_populates="jobs")
+    images = relationship("Image", back_populates="job", cascade="all, delete-orphan")
 
 
 class Image(Base):
@@ -66,14 +66,14 @@ class Image(Base):
     )
 
     id = Column(Integer, primary_key=True, index=True)
-    run_id = Column(Integer, ForeignKey("runs.id"), index=True)
+    job_id = Column(Integer, ForeignKey("jobs.id"), index=True)
     path = Column(String, nullable=False)
     prompt_text = Column(Text)
     width = Column(Integer, nullable=True)
     height = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
-    run = relationship("Run", back_populates="images")
+    job = relationship("Job", back_populates="images")
 
 
 class AppConfig(Base):

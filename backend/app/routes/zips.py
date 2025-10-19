@@ -4,110 +4,110 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from pathlib import Path
 
-from ..database import get_db, Run
+from ..database import get_db, Job
 from ..services.zip_generator import ZipGeneratorService
 
 router = APIRouter(prefix="/api", tags=["zips"])
 
 
-@router.get("/runs/{run_id}/zip")
-async def download_run_zip(run_id: int, db: AsyncSession = Depends(get_db)):
-    """Download ZIP file for a specific run"""
+@router.get("/jobs/{job_id}/zip")
+async def download_job_zip(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Download ZIP file for a specific job"""
     result = await db.execute(
-        select(Run).where(Run.id == run_id)
+        select(Job).where(Job.id == job_id)
     )
-    run = result.scalar_one_or_none()
+    job = result.scalar_one_or_none()
 
-    if not run:
-        raise HTTPException(status_code=404, detail="Run not found")
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
 
-    if run.status != "succeeded":
-        raise HTTPException(status_code=400, detail="Run not completed")
+    if job.status != "succeeded":
+        raise HTTPException(status_code=400, detail="Job not completed")
 
     # If ZIP doesn't exist, build it
-    if not run.zip_path or not Path(run.zip_path).exists():
+    if not job.zip_path or not Path(job.zip_path).exists():
         zip_service = ZipGeneratorService(db)
-        zip_path = await zip_service.build_run_zip(run_id)
+        zip_path = await zip_service.build_job_zip(job_id)
 
         if not zip_path:
             raise HTTPException(status_code=500, detail="Failed to build ZIP")
     else:
-        zip_path = Path(run.zip_path)
+        zip_path = Path(job.zip_path)
 
     return FileResponse(
         path=zip_path,
         media_type="application/zip",
-        filename=f"run_{run_id}.zip",
+        filename=f"job_{job_id}.zip",
         headers={
-            "ETag": run.zip_sha256 if run.zip_sha256 else "",
-            "Content-Length": str(run.zip_size_bytes) if run.zip_size_bytes else ""
+            "ETag": job.zip_sha256 if job.zip_sha256 else "",
+            "Content-Length": str(job.zip_size_bytes) if job.zip_size_bytes else ""
         }
     )
 
 
-@router.head("/runs/{run_id}/zip")
-async def head_run_zip(run_id: int, db: AsyncSession = Depends(get_db)):
-    """Get headers for run ZIP file"""
+@router.head("/jobs/{job_id}/zip")
+async def head_job_zip(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Get headers for job ZIP file"""
     result = await db.execute(
-        select(Run).where(Run.id == run_id)
+        select(Job).where(Job.id == job_id)
     )
-    run = result.scalar_one_or_none()
+    job = result.scalar_one_or_none()
 
-    if not run or not run.zip_path:
+    if not job or not job.zip_path:
         raise HTTPException(status_code=404, detail="ZIP not found")
 
     return Response(
         headers={
-            "Content-Length": str(run.zip_size_bytes) if run.zip_size_bytes else "",
-            "ETag": run.zip_sha256 if run.zip_sha256 else ""
+            "Content-Length": str(job.zip_size_bytes) if job.zip_size_bytes else "",
+            "ETag": job.zip_sha256 if job.zip_sha256 else ""
         }
     )
 
 
 @router.get("/zips/latest")
 async def download_latest_zip(db: AsyncSession = Depends(get_db)):
-    """Download ZIP for the most recent completed run"""
+    """Download ZIP for the most recent completed job"""
     result = await db.execute(
-        select(Run)
-        .where(Run.status == "succeeded")
-        .order_by(Run.finished_at.desc())
+        select(Job)
+        .where(Job.status == "succeeded")
+        .order_by(Job.finished_at.desc())
         .limit(1)
     )
-    run = result.scalar_one_or_none()
+    job = result.scalar_one_or_none()
 
-    if not run:
-        raise HTTPException(status_code=404, detail="No completed runs found")
+    if not job:
+        raise HTTPException(status_code=404, detail="No completed jobs found")
 
     # If ZIP doesn't exist, build it
-    if not run.zip_path or not Path(run.zip_path).exists():
+    if not job.zip_path or not Path(job.zip_path).exists():
         zip_service = ZipGeneratorService(db)
-        zip_path = await zip_service.build_run_zip(run.id)
+        zip_path = await zip_service.build_job_zip(job.id)
 
         if not zip_path:
             raise HTTPException(status_code=500, detail="Failed to build ZIP")
     else:
-        zip_path = Path(run.zip_path)
+        zip_path = Path(job.zip_path)
 
     return FileResponse(
         path=zip_path,
         media_type="application/zip",
-        filename=f"latest_run_{run.id}.zip",
+        filename=f"latest_job_{job.id}.zip",
         headers={
-            "ETag": run.zip_sha256 if run.zip_sha256 else ""
+            "ETag": job.zip_sha256 if job.zip_sha256 else ""
         }
     )
 
 
 @router.get("/zips/all")
 async def download_all_zip(db: AsyncSession = Depends(get_db)):
-    """Download combined ZIP of all images across all runs"""
+    """Download combined ZIP of all images across all jobs"""
     zip_service = ZipGeneratorService(db)
 
     # Check if cached version exists
     from ..database import AppConfig
 
     result = await db.execute(
-        select(AppConfig).where(AppConfig.key == "all_runs_zip_path")
+        select(AppConfig).where(AppConfig.key == "all_jobs_zip_path")
     )
     config = result.scalar_one_or_none()
 
@@ -116,35 +116,35 @@ async def download_all_zip(db: AsyncSession = Depends(get_db)):
         if zip_path.exists():
             # Get SHA-256 from config
             result = await db.execute(
-                select(AppConfig).where(AppConfig.key == "all_runs_zip_sha256")
+                select(AppConfig).where(AppConfig.key == "all_jobs_zip_sha256")
             )
             sha_config = result.scalar_one_or_none()
 
             return FileResponse(
                 path=zip_path,
                 media_type="application/zip",
-                filename="all_runs.zip",
+                filename="all_jobs.zip",
                 headers={
                     "ETag": sha_config.value if sha_config else ""
                 }
             )
 
-    # Build new all-runs ZIP
-    zip_path = await zip_service.build_all_runs_zip()
+    # Build new all-jobs ZIP
+    zip_path = await zip_service.build_all_jobs_zip()
 
     if not zip_path:
         raise HTTPException(status_code=404, detail="No images found")
 
     # Get SHA-256 from config
     result = await db.execute(
-        select(AppConfig).where(AppConfig.key == "all_runs_zip_sha256")
+        select(AppConfig).where(AppConfig.key == "all_jobs_zip_sha256")
     )
     sha_config = result.scalar_one_or_none()
 
     return FileResponse(
         path=zip_path,
         media_type="application/zip",
-        filename="all_runs.zip",
+        filename="all_jobs.zip",
         headers={
             "ETag": sha_config.value if sha_config else ""
         }
@@ -153,11 +153,11 @@ async def download_all_zip(db: AsyncSession = Depends(get_db)):
 
 @router.head("/zips/all")
 async def head_all_zip(db: AsyncSession = Depends(get_db)):
-    """Get headers for all-runs ZIP file"""
+    """Get headers for all-jobs ZIP file"""
     from ..database import AppConfig
 
     result = await db.execute(
-        select(AppConfig).where(AppConfig.key == "all_runs_zip_path")
+        select(AppConfig).where(AppConfig.key == "all_jobs_zip_path")
     )
     config = result.scalar_one_or_none()
 
@@ -170,7 +170,7 @@ async def head_all_zip(db: AsyncSession = Depends(get_db)):
 
     # Get SHA-256
     result = await db.execute(
-        select(AppConfig).where(AppConfig.key == "all_runs_zip_sha256")
+        select(AppConfig).where(AppConfig.key == "all_jobs_zip_sha256")
     )
     sha_config = result.scalar_one_or_none()
 

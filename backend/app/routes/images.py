@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from pathlib import Path
 
-from ..database import get_db, Image, Run
+from ..database import get_db, Image, Job
 from ..services.zip_generator import ZipGeneratorService
 
 router = APIRouter(prefix="/api", tags=["images"])
@@ -12,18 +12,18 @@ router = APIRouter(prefix="/api", tags=["images"])
 
 @router.get("/images")
 async def list_images(
-    run_id: int = None,
+    job_id: int = None,
     page: int = 1,
     page_size: int = 100,
     db: AsyncSession = Depends(get_db)
 ):
-    """List images with optional filtering by run_id"""
+    """List images with optional filtering by job_id"""
     offset = (page - 1) * page_size
 
     query = select(Image).order_by(Image.created_at.desc())
 
-    if run_id is not None:
-        query = query.where(Image.run_id == run_id)
+    if job_id is not None:
+        query = query.where(Image.job_id == job_id)
 
     query = query.offset(offset).limit(page_size)
 
@@ -33,7 +33,7 @@ async def list_images(
     return [
         {
             "id": img.id,
-            "run_id": img.run_id,
+            "job_id": img.job_id,
             "url": f"/api/files/images/{img.id}",
             "prompt_text": img.prompt_text,
             "created_at": img.created_at.isoformat(),
@@ -57,7 +57,7 @@ async def get_image_metadata(image_id: int, db: AsyncSession = Depends(get_db)):
 
     return {
         "id": image.id,
-        "run_id": image.run_id,
+        "job_id": image.job_id,
         "url": f"/api/files/images/{image.id}",
         "prompt_text": image.prompt_text,
         "created_at": image.created_at.isoformat(),
@@ -116,31 +116,31 @@ async def delete_all_images(
     # Delete image records
     await db.execute(delete(Image))
 
-    # Delete per-run ZIPs
-    result = await db.execute(select(Run).where(Run.zip_path.isnot(None)))
-    runs = result.scalars().all()
+    # Delete per-job ZIPs
+    result = await db.execute(select(Job).where(Job.zip_path.isnot(None)))
+    jobs = result.scalars().all()
 
     deleted_zips = 0
-    for run in runs:
-        zip_path = Path(run.zip_path)
+    for job in jobs:
+        zip_path = Path(job.zip_path)
         if zip_path.exists():
             zip_path.unlink()
             deleted_zips += 1
 
         # Clear ZIP metadata
-        run.zip_path = None
-        run.zip_size_bytes = None
-        run.zip_sha256 = None
-        run.zip_built_at = None
+        job.zip_path = None
+        job.zip_size_bytes = None
+        job.zip_sha256 = None
+        job.zip_built_at = None
 
-    # Invalidate all-runs cache
+    # Invalidate all-jobs cache
     zip_service = ZipGeneratorService(db)
-    await zip_service.invalidate_all_runs_cache()
+    await zip_service.invalidate_all_jobs_cache()
 
     await db.commit()
 
     return {
         "deleted_images": deleted_count,
-        "deleted_run_zips": deleted_zips,
+        "deleted_job_zips": deleted_zips,
         "cache_invalidated": True
     }

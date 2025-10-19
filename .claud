@@ -1,0 +1,48 @@
+# StickerPrint Project Context
+
+## Deployment Architecture
+
+- **Development**: Mac at `/Users/mbusbee505/GitHub/StickerPrint`
+- **Production VM**: `root@10.31.0.6:~/StickerPrint`
+- **SSH Access**: Key-based authentication (no password needed)
+- **VM Password**: `3Hyowx1a!` (if needed for sshpass)
+
+## Git Workflow (ALWAYS USE THIS)
+
+### When making changes:
+
+1. **Develop on Mac** (make all code changes locally)
+2. **Commit and push from Mac**:
+   ```bash
+   git add .
+   git commit -m "Description"
+   git push
+   ```
+
+3. **Deploy to VM**:
+   ```bash
+   ssh root@10.31.0.6 'cd ~/StickerPrint && git stash && git pull'
+   ```
+
+4. **Restart services on VM** (if needed):
+   ```bash
+   # Restart frontend
+   ssh root@10.31.0.6 'pkill -9 -f "vite|node.*frontend" && cd ~/StickerPrint/frontend && nohup npm run dev > ../frontend.log 2>&1 </dev/null & disown'
+
+   # Restart backend (if needed)
+   ssh root@10.31.0.6 'pkill -9 -f uvicorn && cd ~/StickerPrint/backend && nohup ./venv/bin/uvicorn app.main:app --reload --host 0.0.0.0 --port 8000 > ../backend.log 2>&1 </dev/null & disown'
+   ```
+
+## Application Details
+
+- **Frontend**: React + Vite on port 3000
+- **Backend**: FastAPI on port 8000
+- **Proxy Config**: Uses `127.0.0.1` not `localhost` (IPv6 issue)
+- **Production URL**: http://10.31.0.6:3000
+
+## Important Notes
+
+- VM uses git stash to handle local changes before pulling
+- Always push from Mac, pull on VM - never the reverse
+- Frontend proxy must use `127.0.0.1:8000` not `localhost:8000`
+- Use SSH without sshpass (key-based auth is configured)

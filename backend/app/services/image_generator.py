@@ -11,13 +11,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update
 from typing import Optional
 
-from ..database import Run, Image, AppConfig
+from ..database import Job, Image, AppConfig
 
 
 class ImageGeneratorService:
-    def __init__(self, db: AsyncSession, run_id: int):
+    def __init__(self, db: AsyncSession, job_id: int):
         self.db = db
-        self.run_id = run_id
+        self.job_id = job_id
         self.delay = 5.0
         self.max_delay = 120.0
         self.success_streak = 0
@@ -39,19 +39,19 @@ class ImageGeneratorService:
         config = result.scalar_one_or_none()
         return config.value if config else None
 
-    async def update_run_status(self, status: str, finished_at: Optional[datetime] = None):
-        """Update run status in database"""
+    async def update_job_status(self, status: str, finished_at: Optional[datetime] = None):
+        """Update job status in database"""
         update_data = {"status": status}
         if finished_at:
             update_data["finished_at"] = finished_at
 
         await self.db.execute(
-            update(Run).where(Run.id == self.run_id).values(**update_data)
+            update(Job).where(Job.id == self.job_id).values(**update_data)
         )
         await self.db.commit()
 
-        await self.emit_event("run_updated", {
-            "run_id": self.run_id,
+        await self.emit_event("job_updated", {
+            "job_id": self.job_id,
             "status": status,
             "finished_at": finished_at.isoformat() if finished_at else None
         })
@@ -59,17 +59,17 @@ class ImageGeneratorService:
     async def generate_images(self, prompts: list[str], base_prompt: str, api_key: str):
         """Generate images for all prompts"""
         if not api_key:
-            await self.update_run_status("failed")
+            await self.update_job_status("failed")
             raise ValueError("API key is required")
 
         # Update status to running
-        await self.update_run_status("running")
+        await self.update_job_status("running")
 
         # Initialize OpenAI client
         client = AsyncOpenAI(api_key=api_key)
 
-        # Create output directory for this run
-        output_dir = Path(__file__).parent.parent.parent.parent / "data" / "images" / str(self.run_id)
+        # Create output directory for this job
+        output_dir = Path(__file__).parent.parent.parent.parent / "data" / "images" / str(self.job_id)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         # Process each prompt
@@ -111,7 +111,7 @@ class ImageGeneratorService:
 
                     # Save to database
                     image_record = Image(
-                        run_id=self.run_id,
+                        job_id=self.job_id,
                         path=str(filepath),
                         prompt_text=prompt,
                         width=1024,
@@ -125,7 +125,7 @@ class ImageGeneratorService:
                     # Emit event
                     await self.emit_event("image_created", {
                         "image_id": image_record.id,
-                        "run_id": self.run_id,
+                        "job_id": self.job_id,
                         "filename": filename,
                         "progress": f"{i}/{len(prompts)}"
                     })
@@ -166,5 +166,5 @@ class ImageGeneratorService:
             if retry_count >= max_retries:
                 print(f"Skipping prompt after {max_retries} retries: {prompt}")
 
-        # Mark run as succeeded
-        await self.update_run_status("succeeded", datetime.utcnow())
+        # Mark job as succeeded
+        await self.update_job_status("succeeded", datetime.utcnow())

@@ -5,22 +5,22 @@ import { sseClient } from '../services/sse';
 
 function Gallery() {
   const [searchParams] = useSearchParams();
-  const runId = searchParams.get('run_id');
+  const jobId = searchParams.get('job_id');
 
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredImage, setHoveredImage] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toast, setToast] = useState(null);
-  const [runs, setRuns] = useState([]);
-  const [selectedRun, setSelectedRun] = useState('all');
+  const [jobs, setRuns] = useState([]);
+  const [selectedJob, setSelectedRun] = useState('all');
 
   useEffect(() => {
     loadImages();
-    loadRuns();
+    loadJobs();
 
     const handleImageCreated = (data) => {
-      if (!runId || data.run_id === parseInt(runId)) {
+      if (!jobId || data.job_id === parseInt(jobId)) {
         loadImages();
       }
     };
@@ -37,7 +37,7 @@ function Gallery() {
       sseClient.off('image_created', handleImageCreated);
       sseClient.off('gallery_cleared', handleGalleryCleared);
     };
-  }, [runId]);
+  }, [jobId]);
 
   useEffect(() => {
     // Auto-dismiss toast after 3 seconds
@@ -55,7 +55,7 @@ function Gallery() {
 
   const loadImages = async () => {
     try {
-      const data = await api.listImages(runId ? parseInt(runId) : null);
+      const data = await api.listImages(jobId ? parseInt(jobId) : null);
       setImages(data);
     } catch (error) {
       showToast('error', 'Failed to load images');
@@ -64,12 +64,12 @@ function Gallery() {
     }
   };
 
-  const loadRuns = async () => {
+  const loadJobs = async () => {
     try {
-      const data = await api.listRuns();
+      const data = await api.listJobs();
       setRuns(data);
     } catch (error) {
-      console.error('Failed to load runs:', error);
+      console.error('Failed to load jobs:', error);
     }
   };
 
@@ -85,12 +85,12 @@ function Gallery() {
   };
 
   const getDownloadUrl = () => {
-    if (selectedRun === 'all') {
+    if (selectedJob === 'all') {
       return api.getAllZipUrl();
-    } else if (selectedRun === 'latest') {
+    } else if (selectedJob === 'latest') {
       return api.getLatestZipUrl();
     } else {
-      return api.getRunZipUrl(selectedRun);
+      return api.getJobZipUrl(selectedJob);
     }
   };
 
@@ -106,20 +106,20 @@ function Gallery() {
     <div className="px-4 sm:px-0">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">
-          Gallery {runId && `- Run ${runId}`}
+          Gallery {jobId && `- Job ${jobId}`}
         </h1>
 
         <div className="flex flex-col sm:flex-row gap-2">
           <select
-            value={selectedRun}
-            onChange={(e) => setSelectedRun(e.target.value)}
+            value={selectedJob}
+            onChange={(e) => setSelectedJob(e.target.value)}
             className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
-            <option value="all">All Runs</option>
-            <option value="latest">Latest Run</option>
-            {runs.map((run) => (
-              <option key={run.id} value={run.id}>
-                {run.prompts_file_name || `Run ${run.id}`}
+            <option value="all">All Jobs</option>
+            <option value="latest">Latest Job</option>
+            {jobs.map((job) => (
+              <option key={job.id} value={job.id}>
+                {job.prompts_file_name || `Job ${job.id}`}
               </option>
             ))}
           </select>

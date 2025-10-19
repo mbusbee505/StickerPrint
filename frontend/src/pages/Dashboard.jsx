@@ -6,7 +6,7 @@ import { sseClient } from '../services/sse';
 function Dashboard() {
   const navigate = useNavigate();
   const [promptsFiles, setPromptsFiles] = useState([]);
-  const [runs, setRuns] = useState([]);
+  const [jobs, setJobs] = useState([]);
   const [selectedFileId, setSelectedFileId] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [uploadedFile, setUploadedFile] = useState(null);
@@ -15,16 +15,16 @@ function Dashboard() {
   useEffect(() => {
     loadData();
 
-    const handleRunUpdate = (data) => {
+    const handleJobUpdate = (data) => {
       loadData();
     };
 
-    sseClient.on('run_updated', handleRunUpdate);
-    sseClient.on('zip_ready', handleRunUpdate);
+    sseClient.on('job_updated', handleJobUpdate);
+    sseClient.on('zip_ready', handleJobUpdate);
 
     return () => {
-      sseClient.off('run_updated', handleRunUpdate);
-      sseClient.off('zip_ready', handleRunUpdate);
+      sseClient.off('job_updated', handleJobUpdate);
+      sseClient.off('zip_ready', handleJobUpdate);
     };
   }, []);
 
@@ -44,12 +44,12 @@ function Dashboard() {
 
   const loadData = async () => {
     try {
-      const [filesData, runsData] = await Promise.all([
+      const [filesData, jobsData] = await Promise.all([
         api.listPromptsFiles(),
-        api.listRuns(),
+        api.listJobs(),
       ]);
       setPromptsFiles(filesData);
-      setRuns(runsData);
+      setJobs(jobsData);
     } catch (error) {
       showToast('error', 'Failed to load data');
     }
@@ -73,17 +73,17 @@ function Dashboard() {
     }
   };
 
-  const handleStartRun = async () => {
+  const handleStartJob = async () => {
     if (!selectedFileId) return;
 
     try {
-      await api.createRun(selectedFileId);
-      showToast('success', 'Run started successfully!');
+      await api.createJob(selectedFileId);
+      showToast('success', 'Job started successfully!');
       setUploadedFile(null);
       setSelectedFileId(null);
       await loadData();
     } catch (error) {
-      showToast('error', 'Failed to start run');
+      showToast('error', 'Failed to start job');
     }
   };
 
@@ -165,21 +165,21 @@ function Dashboard() {
         )}
 
         <button
-          onClick={handleStartRun}
+          onClick={handleStartJob}
           disabled={!selectedFileId || uploading}
           className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
         >
-          Start Run
+          Start Job
         </button>
       </div>
 
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-          Run History
+          Job History
         </h2>
 
-        {runs.length === 0 ? (
-          <p className="text-gray-600 dark:text-gray-400">No runs yet</p>
+        {jobs.length === 0 ? (
+          <p className="text-gray-600 dark:text-gray-400">No jobs yet</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
@@ -203,30 +203,30 @@ function Dashboard() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {runs.map((run) => (
-                  <tr key={run.id}>
+                {jobs.map((job) => (
+                  <tr key={job.id}>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {run.id}
+                      {job.id}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getStatusBadge(run.status)}
+                      {getStatusBadge(job.status)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {run.image_count}
+                      {job.image_count}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
-                      {new Date(run.started_at).toLocaleString()}
+                      {new Date(job.started_at).toLocaleString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                       <button
-                        onClick={() => navigate(`/gallery?run_id=${run.id}`)}
+                        onClick={() => navigate(`/gallery?job_id=${job.id}`)}
                         className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                       >
                         View
                       </button>
-                      {run.zip_ready && (
+                      {job.zip_ready && (
                         <a
-                          href={api.getRunZipUrl(run.id)}
+                          href={api.getJobZipUrl(job.id)}
                           download
                           className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300"
                         >

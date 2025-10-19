@@ -19,33 +19,33 @@ export const api = {
     return response.json();
   },
 
-  // Runs
-  async createRun(promptsFileId) {
-    const response = await fetch(`${API_BASE_URL}/runs`, {
+  // Jobs
+  async createJob(promptsFileId) {
+    const response = await fetch(`${API_BASE_URL}/jobs`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ prompts_file_id: promptsFileId }),
     });
-    if (!response.ok) throw new Error('Failed to create run');
+    if (!response.ok) throw new Error('Failed to create job');
     return response.json();
   },
 
-  async listRuns(limit = 50) {
-    const response = await fetch(`${API_BASE_URL}/runs?limit=${limit}`);
-    if (!response.ok) throw new Error('Failed to fetch runs');
+  async listJobs(limit = 50) {
+    const response = await fetch(`${API_BASE_URL}/jobs?limit=${limit}`);
+    if (!response.ok) throw new Error('Failed to fetch jobs');
     return response.json();
   },
 
-  async getRun(runId) {
-    const response = await fetch(`${API_BASE_URL}/runs/${runId}`);
-    if (!response.ok) throw new Error('Failed to fetch run');
+  async getJob(jobId) {
+    const response = await fetch(`${API_BASE_URL}/jobs/${jobId}`);
+    if (!response.ok) throw new Error('Failed to fetch job');
     return response.json();
   },
 
   // Images
-  async listImages(runId = null, page = 1, pageSize = 100) {
+  async listImages(jobId = null, page = 1, pageSize = 100) {
     let url = `${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`;
-    if (runId !== null) url += `&run_id=${runId}`;
+    if (jobId !== null) url += `&job_id=${jobId}`;
     const response = await fetch(url);
     if (!response.ok) throw new Error('Failed to fetch images');
     return response.json();
@@ -61,8 +61,8 @@ export const api = {
   },
 
   // ZIPs
-  getRunZipUrl(runId) {
-    return `${API_BASE_URL}/runs/${runId}/zip`;
+  getJobZipUrl(jobId) {
+    return `${API_BASE_URL}/jobs/${jobId}/zip`;
   },
 
   getLatestZipUrl() {
