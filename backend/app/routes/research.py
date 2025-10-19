@@ -9,7 +9,7 @@ from sse_starlette.sse import EventSourceResponse
 import json
 import asyncio
 
-from ..database import get_db, AppConfig, ResearchSession, ResearchMessage
+from ..database import get_db, AppConfig, ResearchSession, ResearchMessage, AsyncSessionLocal
 
 router = APIRouter(prefix="/api/research", tags=["research"])
 
@@ -346,8 +346,7 @@ Make this research report comprehensive, specific, and immediately actionable fo
                 ],
                 reasoning={"summary": "auto"},
                 tools=[
-                    {"type": "web_search_preview"},
-                    {"type": "code_interpreter"}
+                    {"type": "web_search_preview"}
                 ]
             )
 
@@ -477,20 +476,26 @@ Filename:"""
             }
 
         except Exception as e:
+            import traceback
+            error_details = traceback.format_exc()
+            print(f"Research error for session {session_id}: {error_details}")
+
             # Update session status to failed
-            from ..database import AsyncSessionLocal
-            async with AsyncSessionLocal() as new_db:
-                result = await new_db.execute(
-                    select(ResearchSession).where(ResearchSession.id == session_id)
-                )
-                db_session = result.scalar_one_or_none()
-                if db_session:
-                    db_session.status = 'failed'
-                    await new_db.commit()
+            try:
+                async with AsyncSessionLocal() as new_db:
+                    result = await new_db.execute(
+                        select(ResearchSession).where(ResearchSession.id == session_id)
+                    )
+                    db_session = result.scalar_one_or_none()
+                    if db_session:
+                        db_session.status = 'failed'
+                        await new_db.commit()
+            except:
+                pass
 
             yield {
                 "event": "error",
-                "data": json.dumps({"error": str(e)})
+                "data": json.dumps({"error": f"{type(e).__name__}: {str(e)}"})
             }
 
     return EventSourceResponse(event_generator())

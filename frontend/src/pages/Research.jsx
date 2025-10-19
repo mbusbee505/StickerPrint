@@ -15,8 +15,36 @@ function Research() {
   const eventSourceRef = useRef(null);
 
   useEffect(() => {
-    loadSessions();
+    loadSessionsAndRestoreState();
   }, []);
+
+  const loadSessionsAndRestoreState = async () => {
+    try {
+      const response = await fetch(`${API_BASE}/api/research/sessions`);
+      const data = await response.json();
+      setSessions(data);
+
+      // Auto-restore the most recent active session
+      const activeSession = data.find(s => s.status === 'active');
+      if (activeSession) {
+        loadSession(activeSession.id);
+
+        // If session is active and has messages, check if research is ongoing
+        const sessionDetail = await fetch(`${API_BASE}/api/research/sessions/${activeSession.id}`);
+        const sessionData = await sessionDetail.json();
+        if (sessionData.status === 'active' && sessionData.messages.length > 0) {
+          // Resume research stream if needed
+          const lastMessage = sessionData.messages[sessionData.messages.length - 1];
+          if (lastMessage.role === 'user') {
+            // User sent message but no response yet - reconnect stream
+            startResearchStream(activeSession.id);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load sessions:', error);
+    }
+  };
 
   useEffect(() => {
     scrollToBottom();
@@ -34,6 +62,18 @@ function Research() {
     } catch (error) {
       console.error('Failed to load sessions:', error);
     }
+  };
+
+  const clearChat = () => {
+    setMessages([]);
+    setThinkingSteps([]);
+    setCurrentStatus('');
+    setAwaitingClarification(false);
+    setInputMessage('');
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+    }
+    setIsResearching(false);
   };
 
   const loadSession = async (sessionId) => {
@@ -152,14 +192,26 @@ function Research() {
     });
 
     eventSource.addEventListener('error', (e) => {
-      console.error('SSE error:', e);
-      const data = e.data ? JSON.parse(e.data) : {};
-      setCurrentStatus(`Error: ${data.error || 'Connection failed'}`);
+      console.error('SSE error event:', e);
+      try {
+        const data = e.data ? JSON.parse(e.data) : {};
+        const errorMsg = data.error || 'Connection failed';
+        setCurrentStatus(`❌ Error: ${errorMsg}`);
+        setMessages(prev => [...prev, { role: 'assistant', content: `Error: ${errorMsg}`, created_at: new Date() }]);
+      } catch (err) {
+        console.error('Error parsing SSE error:', err);
+        setCurrentStatus('❌ Error: Unknown error occurred');
+      }
       setIsResearching(false);
       eventSource.close();
     });
 
-    eventSource.onerror = () => {
+    eventSource.onerror = (e) => {
+      console.error('SSE connection error:', e);
+      if (eventSource.readyState === EventSource.CLOSED) {
+        setCurrentStatus('❌ Connection lost. Please try again.');
+        setMessages(prev => [...prev, { role: 'assistant', content: 'Connection lost. Please try again.', created_at: new Date() }]);
+      }
       setIsResearching(false);
       eventSource.close();
     };
@@ -219,12 +271,21 @@ function Research() {
             {currentSession ? currentSession.title : 'Research Target Demographic'}
           </h2>
           {currentSession && (
-            <button
-              onClick={clearConversation}
-              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-            >
-              New Research
-            </button>
+            <div className="flex gap-2">
+              <button
+                onClick={clearChat}
+                className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
+                title="Clear chat (keeps in history)"
+              >
+                Clear Chat
+              </button>
+              <button
+                onClick={clearConversation}
+                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+              >
+                New Research
+              </button>
+            </div>
           )}
         </div>
 
@@ -364,11 +425,25 @@ function Research() {
                     <div className="text-xs text-gray-500 dark:text-gray-400">
                       {new Date(session.created_at).toLocaleDateString()}
                     </div>
-                    {session.has_result && (
-                      <span className="inline-block mt-1 px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
-                        Completed
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2 mt-1">
+                      {session.has_result && (
+                        <>
+                          <span className="inline-block px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+                            Completed
+                          </span>
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              downloadResult(session.id);
+                            }}
+                            className="inline-flex items-center px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                            title="Download .txt"
+                          >
+                            📥 Download
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                   <button
                     onClick={(e) => {
