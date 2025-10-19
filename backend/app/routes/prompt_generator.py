@@ -27,9 +27,9 @@ async def _process_next_prompt_queue_item(db):
 
     # Check if there's already a PromptsFile being processed
     existing_processing = await db.execute(
-        select(PromptsFile).where(PromptsFile.status == 'processing')
+        select(PromptsFile).where(PromptsFile.status == 'processing').limit(1)
     )
-    if existing_processing.scalar_one_or_none():
+    if existing_processing.first():
         print("[PROMPT_QUEUE] A PromptsFile is already being processed, skipping")
         return False
 
