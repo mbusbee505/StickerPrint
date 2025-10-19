@@ -50,6 +50,14 @@ export const api = {
     return response.json();
   },
 
+  async deleteAllJobs() {
+    const response = await fetch(`${API_BASE_URL}/jobs/all`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete all jobs');
+    return response.json();
+  },
+
   // Images
   async listImages(jobId = null, page = 1, pageSize = 100) {
     let url = `${API_BASE_URL}/images?page=${page}&page_size=${pageSize}`;

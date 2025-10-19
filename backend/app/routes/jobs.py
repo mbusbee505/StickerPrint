@@ -279,3 +279,40 @@ async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "status": job.status,
         "finished_at": job.finished_at.isoformat()
     }
+
+
+@router.delete("/all")
+async def delete_all_jobs(db: AsyncSession = Depends(get_db)):
+    """Delete all jobs and their associated images"""
+    from sqlalchemy import delete
+
+    # Delete all images first (due to foreign key constraints)
+    await db.execute(delete(Image))
+
+    # Delete all jobs
+    result = await db.execute(select(Job))
+    jobs = result.scalars().all()
+    job_count = len(jobs)
+
+    await db.execute(delete(Job))
+
+    # Reset all prompts files to pending status
+    await db.execute(
+        select(PromptsFile)
+    )
+    prompts_files = (await db.execute(select(PromptsFile))).scalars().all()
+    for pf in prompts_files:
+        pf.status = 'pending'
+
+    await db.commit()
+
+    # Broadcast event
+    from ..routes.events import broadcast_event
+    await broadcast_event("jobs_cleared", {
+        "count": job_count
+    })
+
+    return {
+        "deleted_jobs": job_count,
+        "message": "All jobs deleted successfully"
+    }

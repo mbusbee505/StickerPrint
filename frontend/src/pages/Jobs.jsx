@@ -71,6 +71,26 @@ function Jobs() {
     }
   }, [toast]);
 
+  // Auto-start pending jobs when no job is running
+  useEffect(() => {
+    const autoStartNextJob = async () => {
+      // Only auto-start if there's no current job and there are pending files
+      if (!currentJob && promptsFiles.length > 0) {
+        const pendingFile = promptsFiles.find(f => f.status === 'pending');
+        if (pendingFile) {
+          try {
+            await api.createJob(pendingFile.id);
+            await loadData();
+          } catch (error) {
+            console.error('Auto-start failed:', error);
+          }
+        }
+      }
+    };
+
+    autoStartNextJob();
+  }, [currentJob, promptsFiles]);
+
   const handleMultipleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
@@ -117,6 +137,20 @@ function Jobs() {
       await loadData();
     } catch (error) {
       showToast('error', 'Failed to stop job');
+    }
+  };
+
+  const handleDeleteAllJobs = async () => {
+    if (!window.confirm('Are you sure you want to delete all jobs? This cannot be undone.')) {
+      return;
+    }
+
+    try {
+      await api.deleteAllJobs();
+      showToast('success', 'All jobs deleted successfully');
+      await loadData();
+    } catch (error) {
+      showToast('error', 'Failed to delete all jobs');
     }
   };
 
@@ -284,6 +318,9 @@ function Jobs() {
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
             Pending Files ({pendingFiles.length})
           </h2>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+            Files will automatically start processing when no job is running.
+          </p>
 
           <div className="space-y-2">
             {pendingFiles.map((file) => (
@@ -301,14 +338,6 @@ function Jobs() {
                 </div>
                 <div className="flex items-center space-x-2">
                   {getFileStatusBadge(file.status)}
-                  {!currentJob && (
-                    <button
-                      onClick={() => handleStartJob(file.id)}
-                      className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
-                    >
-                      Start Job
-                    </button>
-                  )}
                 </div>
               </div>
             ))}
@@ -325,44 +354,53 @@ function Jobs() {
         {completedJobs.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-400">No completed jobs yet</p>
         ) : (
-          <div className="space-y-3">
-            {completedJobs.map((job) => (
-              <div
-                key={job.id}
-                className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded"
-              >
-                <div className="flex-1">
-                  <div className="flex items-center space-x-3">
-                    <p className="text-sm font-medium text-gray-900 dark:text-white">
-                      Job #{job.id} - {job.prompts_file_name || 'Unknown File'}
-                    </p>
-                    {getStatusBadge(job.status)}
+          <>
+            <div className="space-y-3 mb-6">
+              {completedJobs.map((job) => (
+                <div
+                  key={job.id}
+                  className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded"
+                >
+                  <div className="flex-1">
+                    <div className="flex items-center space-x-3">
+                      <p className="text-sm font-medium text-gray-900 dark:text-white">
+                        Job #{job.id} - {job.prompts_file_name || 'Unknown File'}
+                      </p>
+                      {getStatusBadge(job.status)}
+                    </div>
+                    <div className="mt-1 flex items-center space-x-4 text-xs text-gray-600 dark:text-gray-400">
+                      <span>{job.image_count} images</span>
+                      <span>{new Date(job.started_at).toLocaleString()}</span>
+                    </div>
                   </div>
-                  <div className="mt-1 flex items-center space-x-4 text-xs text-gray-600 dark:text-gray-400">
-                    <span>{job.image_count} images</span>
-                    <span>{new Date(job.started_at).toLocaleString()}</span>
-                  </div>
-                </div>
-                <div className="flex space-x-2">
-                  <button
-                    onClick={() => navigate(`/gallery?job_id=${job.id}`)}
-                    className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm"
-                  >
-                    View
-                  </button>
-                  {job.zip_ready && (
-                    <a
-                      href={api.getJobZipUrl(job.id)}
-                      download
+                  <div className="flex space-x-2">
+                    <button
+                      onClick={() => navigate(`/gallery?job_id=${job.id}`)}
                       className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm"
                     >
-                      Download ZIP
-                    </a>
-                  )}
+                      View
+                    </button>
+                    {job.zip_ready && (
+                      <a
+                        href={api.getJobZipUrl(job.id)}
+                        download
+                        className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-300 text-sm"
+                      >
+                        Download ZIP
+                      </a>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+
+            <button
+              onClick={handleDeleteAllJobs}
+              className="w-full px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+            >
+              Delete All Jobs
+            </button>
+          </>
         )}
       </div>
     </div>
