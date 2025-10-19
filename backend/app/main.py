@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from contextlib import asynccontextmanager
 
 from .database import init_db
-from .routes import prompts, jobs, images, zips, config, events
+from .routes import prompts, jobs, images, zips, config, events, prompt_generator
 
 
 @asynccontextmanager
@@ -31,6 +31,7 @@ app.include_router(images.router)
 app.include_router(zips.router)
 app.include_router(config.router)
 app.include_router(events.router)
+app.include_router(prompt_generator.router)
 
 
 @app.get("/")

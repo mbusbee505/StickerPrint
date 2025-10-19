@@ -15,6 +15,7 @@ class UpdateConfigRequest(BaseModel):
     api_key: Optional[str] = None
     model: Optional[str] = None
     provider: Optional[str] = None
+    prompt_designer_template: Optional[str] = None
 
 
 def mask_api_key(api_key: str) -> str:
@@ -28,7 +29,7 @@ def mask_api_key(api_key: str) -> str:
 async def get_config(db: AsyncSession = Depends(get_db)):
     """Get current configuration with masked API key"""
     result = await db.execute(
-        select(AppConfig).where(AppConfig.key.in_(['base_prompt', 'api_key', 'model', 'provider']))
+        select(AppConfig).where(AppConfig.key.in_(['base_prompt', 'api_key', 'model', 'provider', 'prompt_designer_template']))
     )
     config_items = result.scalars().all()
 
@@ -124,6 +125,25 @@ async def update_config(
             db.add(config)
 
         updated_keys.append("provider")
+
+    if request.prompt_designer_template is not None:
+        result = await db.execute(
+            select(AppConfig).where(AppConfig.key == "prompt_designer_template")
+        )
+        config = result.scalar_one_or_none()
+
+        if config:
+            config.value = request.prompt_designer_template
+            config.updated_at = datetime.utcnow()
+        else:
+            config = AppConfig(
+                key="prompt_designer_template",
+                value=request.prompt_designer_template,
+                updated_at=datetime.utcnow()
+            )
+            db.add(config)
+
+        updated_keys.append("prompt_designer_template")
 
     await db.commit()
 

@@ -105,4 +105,25 @@ export const api = {
     if (!response.ok) throw new Error('Failed to update config');
     return response.json();
   },
+
+  // Prompt Generator
+  async generatePrompts(userInput) {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/generate`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ user_input: userInput }),
+    });
+    if (!response.ok) throw new Error('Failed to generate prompts');
+    return response.json();
+  },
+
+  async listGeneratedPromptFiles() {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/list`);
+    if (!response.ok) throw new Error('Failed to fetch generated files');
+    return response.json();
+  },
+
+  getGeneratedPromptFileUrl(fileId) {
+    return `${API_BASE_URL}/prompt-generator/download/${fileId}`;
+  },
 };
