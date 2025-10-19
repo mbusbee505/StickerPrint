@@ -5,7 +5,6 @@ import Gallery from './pages/Gallery';
 import Config from './pages/Config';
 import PromptGenerator from './pages/PromptGenerator';
 import Research from './pages/Research';
-import Deconstruct from './pages/Deconstruct';
 import { sseClient } from './services/sse';
 
 function App() {
@@ -62,12 +61,6 @@ function App() {
                   Gallery
                 </Link>
                 <Link
-                  to="/deconstruct"
-                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  Deconstruct
-                </Link>
-                <Link
                   to="/research"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
@@ -107,7 +100,7 @@ function App() {
             <Route path="/jobs" element={<Jobs />} />
             <Route path="/prompt-generator" element={<PromptGenerator />} />
             <Route path="/research" element={<Research />} />
-            <Route path="/deconstruct" element={<Deconstruct />} />
+            <Route path="/deconstruct" element={<Navigate to="/prompt-generator" replace />} />
             <Route path="/config" element={<Config />} />
           </Routes>
         </main>

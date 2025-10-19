@@ -10,6 +10,12 @@ function PromptGenerator() {
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState(null);
 
+  // Image deconstruct state
+  const [selectedFiles, setSelectedFiles] = useState([]);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [imageResults, setImageResults] = useState([]);
+  const [deconstructHistory, setDeconstructHistory] = useState([]);
+
   useEffect(() => {
     loadAllData();
 
@@ -55,9 +61,22 @@ function PromptGenerator() {
       setGeneratedFiles(files);
       setPromptQueue(queue);
       setPromptsFiles(prompts);
+
+      // Load deconstruct history
+      await loadDeconstructHistory();
     } catch (error) {
       console.error('[DATA] Load error:', error);
       showToast('error', 'Failed to load data');
+    }
+  };
+
+  const loadDeconstructHistory = async () => {
+    try {
+      const response = await fetch('/api/deconstruct/history');
+      const data = await response.json();
+      setDeconstructHistory(data);
+    } catch (error) {
+      console.error('Failed to load deconstruct history:', error);
     }
   };
 
@@ -151,6 +170,71 @@ function PromptGenerator() {
     );
   };
 
+  // Image deconstruct handlers
+  const handleFileSelect = (e) => {
+    const files = Array.from(e.target.files);
+    setSelectedFiles(files);
+    setImageResults([]);
+  };
+
+  const handleAnalyzeImages = async () => {
+    if (selectedFiles.length === 0) return;
+
+    setIsAnalyzing(true);
+    setImageResults([]);
+
+    try {
+      const formData = new FormData();
+      selectedFiles.forEach(file => {
+        formData.append('files', file);
+      });
+
+      const response = await fetch('/api/deconstruct/analyze', {
+        method: 'POST',
+        body: formData
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+        throw new Error(errorData.detail || 'Analysis failed');
+      }
+
+      const data = await response.json();
+      setImageResults(data);
+      showToast('success', `Generated ${data.length} prompts from images!`);
+      await loadAllData();
+    } catch (error) {
+      console.error('Failed to analyze images:', error);
+      showToast('error', error.message || 'Failed to analyze images');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
+
+  const clearImageSelection = () => {
+    setSelectedFiles([]);
+    setImageResults([]);
+  };
+
+  const downloadDeconstructResult = (uploadId) => {
+    window.open(`/api/deconstruct/download/${uploadId}`, '_blank');
+  };
+
+  const deleteDeconstructUpload = async (uploadId) => {
+    if (!confirm('Delete this upload?')) return;
+
+    try {
+      await fetch(`/api/deconstruct/history/${uploadId}`, {
+        method: 'DELETE'
+      });
+      showToast('success', 'Upload deleted');
+      await loadDeconstructHistory();
+    } catch (error) {
+      console.error('Failed to delete upload:', error);
+      showToast('error', 'Failed to delete upload');
+    }
+  };
+
   return (
     <>
       {/* Toast Notification */}
@@ -174,55 +258,195 @@ function PromptGenerator() {
       )}
 
       <div className="flex h-[calc(100vh-8rem)] gap-4">
-        {/* Left Panel - Generation Form */}
-        <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow">
-          {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-              Generate Sticker Prompts
-            </h2>
+        {/* Left Panel - Two Sections */}
+        <div className="flex-1 flex flex-col gap-4">
+          {/* From Text Section */}
+          <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                From Text
+              </h2>
+            </div>
+
+            {/* Main Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Enter demographic research or description of your target audience. The AI will generate 100 unique sticker design prompts.
+              </p>
+
+              <form onSubmit={handleGenerate}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Demographic Research / Audience Description
+                  </label>
+                  <textarea
+                    value={userInput}
+                    onChange={(e) => setUserInput(e.target.value)}
+                    rows={8}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="Describe your target audience, their interests, demographics, cultural references, hobbies, etc..."
+                    disabled={loading}
+                  />
+                </div>
+
+                <button
+                  type="submit"
+                  disabled={loading || !userInput.trim()}
+                  className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                >
+                  {loading ? 'Generating Prompts...' : 'Generate 100 Prompts'}
+                </button>
+              </form>
+
+              {loading && (
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 rounded">
+                  <div className="flex items-center space-x-2">
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
+                    <p className="text-sm text-blue-800 dark:text-blue-200">
+                      Generating prompts using GPT-5 Thinking Extended... This may take 30-60 seconds.
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
 
-          {/* Main Content */}
-          <div className="flex-1 overflow-y-auto p-4">
-            <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-              Enter demographic research or description of your target audience. The AI will generate 100 unique sticker design prompts optimized for image generation.
-            </p>
+          {/* From Image Section */}
+          <div className="flex-1 flex flex-col bg-white dark:bg-gray-800 rounded-lg shadow">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-white">
+                From Image
+              </h2>
+              {selectedFiles.length > 0 && (
+                <button
+                  onClick={clearImageSelection}
+                  className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+                >
+                  Clear
+                </button>
+              )}
+            </div>
 
-            <form onSubmit={handleGenerate}>
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Demographic Research / Audience Description
-                </label>
-                <textarea
-                  value={userInput}
-                  onChange={(e) => setUserInput(e.target.value)}
-                  rows={15}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                  placeholder="Describe your target audience, their interests, demographics, cultural references, hobbies, etc..."
-                  disabled={loading}
-                />
-              </div>
-
-              <button
-                type="submit"
-                disabled={loading || !userInput.trim()}
-                className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
-              >
-                {loading ? 'Generating Prompts...' : 'Generate 100 Prompts'}
-              </button>
-            </form>
-
-            {loading && (
-              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 rounded">
-                <div className="flex items-center space-x-2">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-indigo-600"></div>
-                  <p className="text-sm text-blue-800 dark:text-blue-200">
-                    Generating prompts using GPT-5 Thinking Extended... This may take 30-60 seconds.
+            {/* Main Content */}
+            <div className="flex-1 overflow-y-auto p-4">
+              {selectedFiles.length === 0 && imageResults.length === 0 && (
+                <div className="text-center py-8">
+                  <p className="text-gray-600 dark:text-gray-400 mb-4">
+                    Upload images to generate sticker design prompts based on their style and content
                   </p>
+                  <label className="inline-flex items-center px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 cursor-pointer">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5 mr-2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5m-13.5-9L12 3m0 0l4.5 4.5M12 3v13.5" />
+                    </svg>
+                    Choose Images
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/*"
+                      onChange={handleFileSelect}
+                      className="hidden"
+                    />
+                  </label>
                 </div>
-              </div>
-            )}
+              )}
+
+              {selectedFiles.length > 0 && imageResults.length === 0 && (
+                <div className="space-y-4">
+                  <div className="text-center">
+                    <p className="text-gray-700 dark:text-gray-300 mb-4">
+                      {selectedFiles.length} image{selectedFiles.length !== 1 ? 's' : ''} selected
+                    </p>
+                    <button
+                      onClick={handleAnalyzeImages}
+                      disabled={isAnalyzing}
+                      className="px-6 py-3 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+                    >
+                      {isAnalyzing ? 'Analyzing...' : 'Analyze Images'}
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {selectedFiles.map((file, idx) => (
+                      <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-2">
+                        <img
+                          src={URL.createObjectURL(file)}
+                          alt={file.name}
+                          className="w-full h-24 object-cover rounded mb-1"
+                        />
+                        <p className="text-xs text-gray-600 dark:text-gray-400 truncate">
+                          {file.name}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              {imageResults.length > 0 && (
+                <div className="space-y-4">
+                  <div className="bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <h3 className="text-lg font-semibold text-green-900 dark:text-green-100 mb-2">
+                      Analysis Complete!
+                    </h3>
+                    <p className="text-green-800 dark:text-green-200">
+                      Generated {imageResults.length} sticker design prompt{imageResults.length !== 1 ? 's' : ''}
+                    </p>
+                  </div>
+
+                  <div className="max-h-48 overflow-y-auto space-y-2">
+                    {imageResults.map((result, idx) => (
+                      <div key={idx} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3">
+                        <div className="flex items-start gap-2">
+                          <span className="inline-flex items-center justify-center w-5 h-5 bg-indigo-600 text-white text-xs font-bold rounded-full flex-shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium text-gray-700 dark:text-gray-300 mb-1 truncate">
+                              {result.filename}
+                            </p>
+                            <p className="text-sm text-gray-900 dark:text-white line-clamp-2">
+                              {result.prompt}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => downloadDeconstructResult(deconstructHistory[0]?.id)}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+                    >
+                      Download
+                    </button>
+                    <label className="flex-1 inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer">
+                      Analyze More
+                      <input
+                        type="file"
+                        multiple
+                        accept="image/*"
+                        onChange={handleFileSelect}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              )}
+
+              {isAnalyzing && (
+                <div className="flex items-center justify-center py-8">
+                  <div className="text-center">
+                    <div className="w-12 h-12 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+                    <p className="text-sm text-gray-700 dark:text-gray-300">
+                      Analyzing images and generating prompts...
+                    </p>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
 
@@ -274,10 +498,10 @@ function PromptGenerator() {
             </div>
           </div>
 
-          {/* Previously Generated Files Section */}
+          {/* Generated Prompts Section */}
           <div className="h-96 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Previously Generated Files ({generatedFiles.length})
+              Generated Prompts ({generatedFiles.length})
             </h3>
             <div className="flex-1 overflow-y-auto space-y-2">
               {generatedFiles.length === 0 ? (
