@@ -283,45 +283,68 @@ async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.delete("/all")
 async def delete_all_jobs(db: AsyncSession = Depends(get_db)):
-    """Delete all jobs, images, and prompts files"""
+    """Delete completed jobs and pending prompts files, but keep current job and all images"""
     from sqlalchemy import delete
     import os
 
-    # Get all jobs to count and clean up files
+    # Get all jobs
     result = await db.execute(select(Job))
-    jobs = result.scalars().all()
-    job_count = len(jobs)
+    all_jobs = result.scalars().all()
 
-    # Get all images to delete their files
-    result = await db.execute(select(Image))
-    images = result.scalars().all()
-    for image in images:
-        try:
-            if os.path.exists(image.path):
-                os.remove(image.path)
-        except Exception as e:
-            print(f"Failed to delete image file {image.path}: {e}")
+    # Find running/queued jobs to preserve
+    running_jobs = [j for j in all_jobs if j.status in ['running', 'queued']]
+    running_job_ids = [j.id for j in running_jobs]
+    running_prompts_file_ids = [j.prompts_file_id for j in running_jobs]
 
-    # Delete all images from database
-    await db.execute(delete(Image))
+    # Delete only completed/failed/canceled jobs
+    jobs_to_delete = [j for j in all_jobs if j.status not in ['running', 'queued']]
+    job_count = len(jobs_to_delete)
 
-    # Delete all jobs
-    await db.execute(delete(Job))
+    for job in jobs_to_delete:
+        await db.execute(
+            delete(Job).where(Job.id == job.id)
+        )
 
-    # Get all prompts files and delete them
-    result = await db.execute(select(PromptsFile))
-    prompts_files = result.scalars().all()
-    prompts_count = len(prompts_files)
+    # Get all prompts files that are pending (not being processed)
+    result = await db.execute(
+        select(PromptsFile).where(PromptsFile.status == 'pending')
+    )
+    pending_prompts_files = result.scalars().all()
+    prompts_count = len(pending_prompts_files)
 
-    for pf in prompts_files:
+    # Delete pending prompts files (both from disk and database)
+    for pf in pending_prompts_files:
         try:
             if os.path.exists(pf.path):
                 os.remove(pf.path)
         except Exception as e:
             print(f"Failed to delete prompts file {pf.path}: {e}")
 
-    # Delete all prompts files from database
-    await db.execute(delete(PromptsFile))
+        await db.execute(
+            delete(PromptsFile).where(PromptsFile.id == pf.id)
+        )
+
+    # Also delete prompts files for completed jobs (but not current running job)
+    result = await db.execute(
+        select(PromptsFile).where(
+            PromptsFile.status == 'completed',
+            PromptsFile.id.notin_(running_prompts_file_ids) if running_prompts_file_ids else True
+        )
+    )
+    completed_prompts_files = result.scalars().all()
+
+    for pf in completed_prompts_files:
+        try:
+            if os.path.exists(pf.path):
+                os.remove(pf.path)
+        except Exception as e:
+            print(f"Failed to delete prompts file {pf.path}: {e}")
+
+        await db.execute(
+            delete(PromptsFile).where(PromptsFile.id == pf.id)
+        )
+
+    prompts_count += len(completed_prompts_files)
 
     await db.commit()
 
@@ -334,5 +357,6 @@ async def delete_all_jobs(db: AsyncSession = Depends(get_db)):
     return {
         "deleted_jobs": job_count,
         "deleted_prompts_files": prompts_count,
-        "message": "All jobs and files deleted successfully"
+        "preserved_jobs": len(running_jobs),
+        "message": "Completed jobs and pending files deleted successfully. Current job and images preserved."
     }
