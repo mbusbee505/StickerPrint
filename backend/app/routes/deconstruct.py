@@ -7,7 +7,7 @@ from datetime import datetime
 import base64
 from pathlib import Path
 
-from ..database import get_db, AppConfig, DeconstructUpload
+from ..database import get_db, AppConfig, DeconstructUpload, GeneratedPromptFile
 
 router = APIRouter(prefix="/api/deconstruct", tags=["deconstruct"])
 
@@ -164,6 +164,22 @@ async def analyze_images(
 
     # Set result_path before commit
     upload_record.result_path = str(filepath)
+
+    # Also create a GeneratedPromptFile entry so it appears in the Generated Prompts list
+    # Create a user_input summary from the uploaded filenames
+    filenames_summary = ", ".join([f.filename for f in files[:3]])
+    if len(files) > 3:
+        filenames_summary += f" and {len(files) - 3} more"
+    user_input_text = f"Image analysis of: {filenames_summary}"
+
+    generated_file = GeneratedPromptFile(
+        filename=filename,
+        path=str(filepath),
+        user_input=user_input_text,
+        prompt_count=len(prompts_text)
+    )
+    db.add(generated_file)
+
     await db.commit()
 
     return results
