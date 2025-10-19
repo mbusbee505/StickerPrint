@@ -96,6 +96,31 @@ class GeneratedPromptFile(Base):
     prompt_count = Column(Integer, default=100)
 
 
+class ResearchSession(Base):
+    __tablename__ = "research_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, nullable=False)
+    status = Column(String, default='active')  # active, completed, failed
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+    completed_at = Column(DateTime, nullable=True)
+    result_path = Column(String, nullable=True)
+
+    messages = relationship("ResearchMessage", back_populates="session", cascade="all, delete-orphan", order_by="ResearchMessage.created_at")
+
+
+class ResearchMessage(Base):
+    __tablename__ = "research_messages"
+
+    id = Column(Integer, primary_key=True, index=True)
+    session_id = Column(Integer, ForeignKey("research_sessions.id"), index=True)
+    role = Column(String, nullable=False)  # user, assistant, system
+    content = Column(Text, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+    session = relationship("ResearchSession", back_populates="messages")
+
+
 async def init_db():
     """Initialize database and create tables"""
     async with engine.begin() as conn:
