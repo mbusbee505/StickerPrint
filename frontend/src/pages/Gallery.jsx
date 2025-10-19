@@ -10,7 +10,6 @@ function Gallery() {
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hoveredImage, setHoveredImage] = useState(null);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [toast, setToast] = useState(null);
   const [jobs, setRuns] = useState([]);
   const [selectedJob, setSelectedRun] = useState('all');
@@ -73,17 +72,6 @@ function Gallery() {
     }
   };
 
-  const handleDeleteAll = async () => {
-    try {
-      await api.deleteAllImages();
-      setImages([]);
-      setShowDeleteConfirm(false);
-      showToast('success', 'All images deleted successfully!');
-    } catch (error) {
-      showToast('error', 'Failed to delete images');
-    }
-  };
-
   const getDownloadUrl = () => {
     if (selectedJob === 'all') {
       return api.getAllZipUrl();
@@ -131,13 +119,6 @@ function Gallery() {
           >
             Download
           </a>
-
-          <button
-            onClick={() => setShowDeleteConfirm(true)}
-            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-          >
-            Delete All
-          </button>
         </div>
       </div>
 
@@ -156,33 +137,6 @@ function Gallery() {
                 {toast.type === 'success' ? '✓' : '✕'}
               </span>
               <span className="font-medium">{toast.text}</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md">
-            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
-              Confirm Delete
-            </h2>
-            <p className="text-gray-700 dark:text-gray-300 mb-6">
-              Are you sure you want to delete all images? This action cannot be undone.
-            </p>
-            <div className="flex justify-end space-x-4">
-              <button
-                onClick={() => setShowDeleteConfirm(false)}
-                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white rounded hover:bg-gray-400"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleDeleteAll}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-              >
-                Delete All
-              </button>
             </div>
           </div>
         </div>

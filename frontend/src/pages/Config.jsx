@@ -12,6 +12,7 @@ function Config() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   useEffect(() => {
     loadConfig();
@@ -66,6 +67,16 @@ function Config() {
 
   const handleChange = (field, value) => {
     setConfig({ ...config, [field]: value });
+  };
+
+  const handleDeleteAll = async () => {
+    try {
+      await api.deleteAllImages();
+      setShowDeleteConfirm(false);
+      showToast('success', 'All images deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete images');
+    }
   };
 
   return (
@@ -170,6 +181,50 @@ function Config() {
           {saving ? 'Saving...' : 'Save Configuration'}
         </button>
       </form>
+
+      {/* Danger Zone */}
+      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mt-6 border-2 border-red-500">
+        <h2 className="text-xl font-bold text-red-600 dark:text-red-400 mb-4">
+          Danger Zone
+        </h2>
+        <p className="text-gray-700 dark:text-gray-300 mb-4">
+          Permanently delete all images from the gallery. This action cannot be undone.
+        </p>
+        <button
+          onClick={() => setShowDeleteConfirm(true)}
+          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+        >
+          Delete All Images
+        </button>
+      </div>
+
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md">
+            <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">
+              Confirm Delete
+            </h2>
+            <p className="text-gray-700 dark:text-gray-300 mb-6">
+              Are you sure you want to delete all images? This action cannot be undone.
+            </p>
+            <div className="flex justify-end space-x-4">
+              <button
+                onClick={() => setShowDeleteConfirm(false)}
+                className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white rounded hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteAll}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              >
+                Delete All
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
