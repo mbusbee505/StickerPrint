@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { sseClient } from '../services/sse';
 
+const PENDING_QUEUE_KEY = 'stickerprint_pending_queue';
+
 function Jobs() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
@@ -16,6 +18,55 @@ function Jobs() {
   const showToast = (type, text) => {
     setToast({ type, text });
   };
+
+  // Load pending queue from localStorage on mount and verify files exist
+  useEffect(() => {
+    const loadAndVerifyQueue = async () => {
+      const savedQueue = localStorage.getItem(PENDING_QUEUE_KEY);
+      if (savedQueue) {
+        try {
+          const queue = JSON.parse(savedQueue);
+
+          // Get all prompts files and jobs
+          const [allPromptsFiles, allJobs] = await Promise.all([
+            api.listPromptsFiles(),
+            api.listJobs()
+          ]);
+
+          const existingFileIds = new Set(allPromptsFiles.map(f => f.id));
+          const usedFileIds = new Set(allJobs.map(j => j.prompts_file_id));
+
+          // Verify each file still exists and hasn't been used
+          const verifiedQueue = [];
+          for (const file of queue) {
+            if (existingFileIds.has(file.id) && !usedFileIds.has(file.id)) {
+              verifiedQueue.push(file);
+            } else {
+              console.log(`Removed file from queue: ${file.filename} (${existingFileIds.has(file.id) ? 'already used' : 'no longer exists'})`);
+            }
+          }
+
+          setPendingFiles(verifiedQueue);
+
+          // Update localStorage with verified queue
+          if (verifiedQueue.length !== queue.length) {
+            localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(verifiedQueue));
+          }
+        } catch (error) {
+          console.error('Failed to load pending queue:', error);
+          // Clear invalid data
+          localStorage.removeItem(PENDING_QUEUE_KEY);
+        }
+      }
+    };
+
+    loadAndVerifyQueue();
+  }, []);
+
+  // Save pending queue to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(pendingFiles));
+  }, [pendingFiles]);
 
   const loadData = async () => {
     try {
@@ -96,6 +147,13 @@ function Jobs() {
     processNextFile();
   }, [pendingFiles, isProcessing, currentJob]);
 
+  const handleFileSelect = (event) => {
+    const file = fileInputRef.current?.files?.[0];
+    if (file) {
+      handleMultipleFileUpload(event);
+    }
+  };
+
   const handleMultipleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
@@ -121,6 +179,18 @@ function Jobs() {
       showToast('error', 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleStopJob = async () => {
+    if (!currentJob) return;
+
+    try {
+      await api.cancelJob(currentJob.id);
+      showToast('success', 'Job stopped successfully');
+      await loadData();
+    } catch (error) {
+      showToast('error', 'Failed to stop job');
     }
   };
 
@@ -163,9 +233,33 @@ function Jobs() {
 
   return (
     <div className="px-4 sm:px-0">
-      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-6">
-        Jobs
-      </h1>
+      {/* Header with Upload Button */}
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-4 sm:mb-0">
+          Jobs
+        </h1>
+
+        <div className="flex gap-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept=".txt"
+            multiple
+            onChange={handleMultipleFileUpload}
+            disabled={uploading}
+            className="hidden"
+            id="file-upload"
+          />
+          <label
+            htmlFor="file-upload"
+            className={`px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 cursor-pointer text-center ${
+              uploading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+          >
+            {uploading ? 'Uploading...' : 'Upload Prompts'}
+          </label>
+        </div>
+      </div>
 
       {/* Toast Notification */}
       {toast && (
@@ -186,32 +280,6 @@ function Jobs() {
           </div>
         </div>
       )}
-
-      {/* Upload Section */}
-      <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-          Upload Prompts
-        </h2>
-
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-            Select multiple .txt files with prompts (one per line)
-          </label>
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept=".txt"
-            multiple
-            onChange={handleMultipleFileUpload}
-            disabled={uploading}
-            className="block w-full text-sm text-gray-900 dark:text-white bg-gray-50 dark:bg-gray-700 rounded border border-gray-300 dark:border-gray-600 cursor-pointer focus:outline-none"
-          />
-        </div>
-
-        <p className="text-sm text-gray-600 dark:text-gray-400">
-          Files will automatically be processed in order after upload.
-        </p>
-      </div>
 
       {/* Current Job Section */}
       {currentJob && (
@@ -252,6 +320,14 @@ function Jobs() {
               >
                 View Gallery
               </button>
+              {(currentJob.status === 'running' || currentJob.status === 'queued') && (
+                <button
+                  onClick={handleStopJob}
+                  className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+                >
+                  Stop Job
+                </button>
+              )}
               {currentJob.zip_ready && (
                 <a
                   href={api.getJobZipUrl(currentJob.id)}

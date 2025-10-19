@@ -223,3 +223,37 @@ async def get_job(job_id: int, db: AsyncSession = Depends(get_db)):
         }
 
     return response
+
+
+@router.post("/{job_id}/cancel")
+async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
+    """Cancel a running or queued job"""
+    result = await db.execute(
+        select(Job).where(Job.id == job_id)
+    )
+    job = result.scalar_one_or_none()
+
+    if not job:
+        raise HTTPException(status_code=404, detail="Job not found")
+
+    if job.status not in ['queued', 'running']:
+        raise HTTPException(status_code=400, detail="Job is not running or queued")
+
+    # Update job status to canceled
+    job.status = 'canceled'
+    job.finished_at = datetime.utcnow()
+    await db.commit()
+
+    # Broadcast event
+    from ..routes.events import broadcast_event
+    await broadcast_event("job_updated", {
+        "job_id": job.id,
+        "status": "canceled",
+        "finished_at": job.finished_at.isoformat()
+    })
+
+    return {
+        "id": job.id,
+        "status": job.status,
+        "finished_at": job.finished_at.isoformat()
+    }
