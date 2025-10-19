@@ -126,7 +126,7 @@ class DeconstructUpload(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     image_count = Column(Integer, nullable=False)
-    result_path = Column(String, nullable=False)
+    result_path = Column(String, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow, index=True)
 
 

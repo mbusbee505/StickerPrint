@@ -44,7 +44,8 @@ function Deconstruct() {
       });
 
       if (!response.ok) {
-        throw new Error('Analysis failed');
+        const errorData = await response.json().catch(() => ({ detail: 'Analysis failed' }));
+        throw new Error(errorData.detail || 'Analysis failed');
       }
 
       const data = await response.json();
@@ -52,7 +53,7 @@ function Deconstruct() {
       loadHistory();
     } catch (error) {
       console.error('Failed to analyze images:', error);
-      alert('Failed to analyze images. Please try again.');
+      alert(`Failed to analyze images: ${error.message}`);
     } finally {
       setIsAnalyzing(false);
     }
