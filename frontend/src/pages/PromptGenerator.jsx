@@ -454,9 +454,14 @@ function PromptGenerator() {
         <div className="w-96 flex flex-col gap-4">
           {/* Prompt Queue Section */}
           <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Prompt Queue ({promptQueue.filter(q => q.status === 'pending').length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Prompt Queue
+              </h3>
+              <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                {promptQueue.filter(q => q.status === 'pending').length}
+              </span>
+            </div>
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
               Files will be automatically sent to the job queue one at a time.
             </p>
@@ -500,9 +505,14 @@ function PromptGenerator() {
 
           {/* Generated Prompts Section */}
           <div className="h-96 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-              Generated Prompts ({generatedFiles.length})
-            </h3>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+                Generated Prompts
+              </h3>
+              <span className="text-lg font-semibold text-gray-900 dark:text-white">
+                {generatedFiles.length}
+              </span>
+            </div>
             <div className="flex-1 overflow-y-auto space-y-2">
               {generatedFiles.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
