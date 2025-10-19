@@ -62,16 +62,10 @@ function App() {
                   Gallery
                 </Link>
                 <Link
-                  to="/jobs"
+                  to="/deconstruct"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
-                  Jobs
-                </Link>
-                <Link
-                  to="/prompt-generator"
-                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  Prompts
+                  Deconstruct
                 </Link>
                 <Link
                   to="/research"
@@ -80,10 +74,16 @@ function App() {
                   Research
                 </Link>
                 <Link
-                  to="/deconstruct"
+                  to="/prompt-generator"
                   className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
-                  Deconstruct
+                  Prompts
+                </Link>
+                <Link
+                  to="/jobs"
+                  className="inline-flex items-center px-1 pt-1 text-sm font-medium text-gray-900 dark:text-white hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  Jobs
                 </Link>
                 <Link
                   to="/config"
