@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, desc
+from sqlalchemy.orm import selectinload
 from pydantic import BaseModel
 from datetime import datetime
 from pathlib import Path
@@ -117,7 +118,9 @@ async def get_session(
 ):
     """Get a specific research session with messages"""
     result = await db.execute(
-        select(ResearchSession).where(ResearchSession.id == session_id)
+        select(ResearchSession)
+        .where(ResearchSession.id == session_id)
+        .options(selectinload(ResearchSession.messages))
     )
     session = result.scalar_one_or_none()
 
