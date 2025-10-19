@@ -216,7 +216,7 @@ function Research() {
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b dark:border-gray-700">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {currentSession ? currentSession.title : 'Deep Research'}
+            {currentSession ? currentSession.title : 'Research Target Demographic'}
           </h2>
           {currentSession && (
             <button
@@ -233,11 +233,15 @@ function Research() {
           {messages.length === 0 && !currentSession && (
             <div className="text-center py-12">
               <h3 className="text-2xl font-semibold text-gray-900 dark:text-white mb-2">
-                Start a Deep Research
+                Discover Your Target Demographic
               </h3>
-              <p className="text-gray-600 dark:text-gray-400 mb-6">
-                Ask anything and I'll conduct thorough research with web searches and analysis
+              <p className="text-gray-600 dark:text-gray-400 mb-4">
+                Enter any audience type to generate a comprehensive sticker design profile
               </p>
+              <div className="text-sm text-gray-500 dark:text-gray-400 space-y-1">
+                <p>Examples:</p>
+                <p className="text-indigo-600 dark:text-indigo-400">"college students" • "nurses" • "anime fans" • "dog owners"</p>
+              </div>
             </div>
           )}
 
@@ -279,7 +283,7 @@ function Research() {
               placeholder={
                 currentSession
                   ? 'Send a follow-up message...'
-                  : 'What would you like to research?'
+                  : 'Enter a demographic (e.g., "gamers", "Gen Z", "Taylor Swift fans")...'
               }
               className="flex-1 px-4 py-2 border dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white resize-none"
               rows="3"
@@ -310,7 +314,7 @@ function Research() {
         {/* Thinking Panel */}
         <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-            Thinking Process
+            Research Activity
           </h3>
 
           {isResearching && (

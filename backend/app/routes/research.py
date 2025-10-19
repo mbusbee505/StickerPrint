@@ -238,7 +238,7 @@ async def stream_research(
                     messages=[
                         {
                             "role": "system",
-                            "content": "You are a research assistant. Determine if the following query needs clarification. If it's clear and specific, respond with 'CLEAR'. If you need more information, ask 1-2 specific follow-up questions. Be concise."
+                            "content": "You are a sticker market research specialist. Your goal is to research demographics that purchase stickers to identify potential customers and create detailed profiles for designing targeted sticker image generation prompts.\n\nThe user will provide a simple input like:\n- A type of person (e.g., 'college students', 'nurses', 'gamers')\n- A category (e.g., 'anime fans', 'dog owners', 'skaters')\n- A demographic (e.g., 'Gen Z', 'millennials', 'parents')\n- Or any simple descriptor\n\nYour job: Determine if you have enough to start comprehensive research. Almost always respond with 'CLEAR' and proceed with research. Only ask for clarification if the input is completely ambiguous or impossible to research (e.g., just 'stuff' or nonsensical text).\n\nBe permissive - interpret simple inputs generously and start research. If they say 'gamers', that's enough. If they say 'moms', that's enough. If they say 'Taylor Swift fans', that's enough."
                         },
                         {
                             "role": "user",
@@ -279,8 +279,55 @@ async def stream_research(
                 "data": json.dumps({"status": "starting_research", "message": "Starting deep research..."})
             }
 
-            # Build the research query from conversation
-            research_query = user_query
+            # Build the research query from conversation with sticker-focused context
+            research_query = f"""CONTEXT: You are researching demographics for a sticker design business. The user has provided a simple input describing a target audience. Your job is to conduct comprehensive demographic research to build a detailed profile for creating sticker design prompts.
+
+TARGET AUDIENCE: {user_query}
+
+INSTRUCTIONS:
+1. First, interpret the user's input broadly and identify the demographic they're referring to
+2. Conduct deep research to build a comprehensive demographic profile
+
+Your research MUST include ALL of the following sections:
+
+## DEMOGRAPHIC OVERVIEW
+- Age range and generation (Gen Z, Millennial, etc.)
+- Gender distribution and considerations
+- Geographic concentration (urban/suburban/rural, regional trends)
+- Socioeconomic factors and price sensitivity
+
+## PSYCHOGRAPHICS & INTERESTS
+- Core hobbies, activities, and passions
+- Subcultures and communities they belong to
+- Values, causes, and movements they support
+- Lifestyle patterns and daily routines
+
+## VISUAL & AESTHETIC PREFERENCES
+- Art styles they gravitate toward (vector, illustrated, photographic, etc.)
+- Color palettes and visual themes
+- Design trends they follow
+- Examples of visual content they engage with
+
+## CULTURAL TOUCHPOINTS
+- Pop culture references, memes, and inside jokes
+- Influential figures, celebrities, or content creators they follow
+- Media consumption (shows, games, music, podcasts)
+- Platform usage (TikTok, Instagram, Reddit, Discord, etc.)
+
+## PURCHASING BEHAVIOR
+- Where they shop (online/physical, specific retailers)
+- Price points they're comfortable with
+- What motivates their purchases (humor, identity, aesthetics, fandom)
+- How they discover new products
+
+## STICKER DESIGN RECOMMENDATIONS
+Based on the research above, provide 8-12 specific sticker design direction ideas that would appeal to this demographic. For each direction:
+- Describe the concept/theme
+- Specify the art style
+- Suggest color palette
+- Note any cultural references or inside jokes to include
+
+Make this research report comprehensive, specific, and immediately actionable for generating sticker design prompts."""
 
             # Call deep research API with streaming
             yield {

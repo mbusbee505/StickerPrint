@@ -121,6 +121,15 @@ class ResearchMessage(Base):
     session = relationship("ResearchSession", back_populates="messages")
 
 
+class DeconstructUpload(Base):
+    __tablename__ = "deconstruct_uploads"
+
+    id = Column(Integer, primary_key=True, index=True)
+    image_count = Column(Integer, nullable=False)
+    result_path = Column(String, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, index=True)
+
+
 async def init_db():
     """Initialize database and create tables"""
     async with engine.begin() as conn:
