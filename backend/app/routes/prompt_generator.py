@@ -57,8 +57,41 @@ async def generate_prompts(
     prompt = template.replace('{USER_INPUT}', request.user_input)
 
     try:
-        # Call OpenAI API with gpt-5-thinking-extended
+        # Step 1: Generate a descriptive filename using GPT-4o
         client = AsyncOpenAI(api_key=api_key)
+
+        filename_prompt = f"""Based on this demographic research, create a short, descriptive filename of 1-4 words that captures the target audience or theme. Use only lowercase letters, numbers, and underscores. No file extension.
+
+Research: {request.user_input[:500]}
+
+Examples:
+- "college_gamers"
+- "eco_moms"
+- "tech_startups"
+- "anime_fans"
+
+Filename:"""
+
+        filename_response = await client.chat.completions.create(
+            model="gpt-4o",
+            messages=[
+                {"role": "user", "content": filename_prompt}
+            ],
+            max_tokens=20
+        )
+
+        filename_base = filename_response.choices[0].message.content.strip()
+        # Clean the filename to ensure it's safe
+        filename_base = re.sub(r'[^a-z0-9_]', '', filename_base.lower())
+        if not filename_base or len(filename_base) < 2:
+            # Fallback to sanitized user input
+            sanitized_input = re.sub(r'[^a-zA-Z0-9\s]', '', request.user_input)
+            words = sanitized_input.split()[:3]
+            filename_base = '_'.join(words).lower()
+
+        filename = f"{filename_base}.txt"
+
+        # Step 2: Generate the 100 prompts using o3-mini
         response = await client.chat.completions.create(
             model="o3-mini",
             messages=[
@@ -85,13 +118,6 @@ async def generate_prompts(
                 status_code=500,
                 detail=f"Generated only {len(prompts)} prompts, expected around 100"
             )
-
-        # Create a short descriptive filename from user input
-        sanitized_input = re.sub(r'[^a-zA-Z0-9\s]', '', request.user_input)
-        words = sanitized_input.split()[:5]  # Take first 5 words
-        filename_base = '_'.join(words).lower()
-        timestamp = datetime.utcnow().strftime('%Y%m%d_%H%M%S')
-        filename = f"{filename_base}_{timestamp}.txt"
 
         # Write prompts to file
         filepath = GENERATED_PROMPTS_DIR / filename
