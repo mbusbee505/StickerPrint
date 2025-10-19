@@ -45,22 +45,14 @@ function Research() {
       const data = await response.json();
       setSessions(data);
 
-      // Auto-restore the most recent active session
+      // Auto-restore the most recent active session (but don't auto-reconnect stream)
       const activeSession = data.find(s => s.status === 'active');
       if (activeSession) {
         loadSession(activeSession.id);
 
-        // If session is active and has messages, check if research is ongoing
-        const sessionDetail = await fetch(`${API_BASE}/api/research/sessions/${activeSession.id}`);
-        const sessionData = await sessionDetail.json();
-        if (sessionData.status === 'active' && sessionData.messages.length > 0) {
-          // Resume research stream if needed
-          const lastMessage = sessionData.messages[sessionData.messages.length - 1];
-          if (lastMessage.role === 'user') {
-            // User sent message but no response yet - reconnect stream
-            startResearchStream(activeSession.id);
-          }
-        }
+        // DON'T auto-reconnect streams on page load to avoid rate limits
+        // User must manually click to resume research
+        console.log('Active session found, but NOT auto-reconnecting to avoid rate limits');
       }
     } catch (error) {
       console.error('Failed to load sessions:', error);
@@ -146,13 +138,21 @@ function Research() {
   };
 
   const startResearchStream = (sessionId) => {
-    // Close existing connection if any
+    // Prevent multiple simultaneous streams
     if (eventSourceRef.current) {
-      console.log('Closing existing stream before starting new one');
+      console.warn('Stream already active, closing existing stream first');
       eventSourceRef.current.close();
       eventSourceRef.current = null;
+
+      // Wait a moment for cleanup before starting new stream
+      setTimeout(() => startResearchStreamInternal(sessionId), 500);
+      return;
     }
 
+    startResearchStreamInternal(sessionId);
+  };
+
+  const startResearchStreamInternal = (sessionId) => {
     console.log(`Starting research stream for session ${sessionId}`);
     setIsResearching(true);
     setThinkingSteps([]);

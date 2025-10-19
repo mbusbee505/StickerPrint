@@ -188,6 +188,10 @@ async def stream_research(
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Prevent processing if session is already completed or failed
+    if session.status in ['completed', 'failed']:
+        raise HTTPException(status_code=400, detail=f"Session already {session.status}. Cannot restart.")
+
     # Get API key
     api_result = await db.execute(
         select(AppConfig).where(AppConfig.key == "api_key")
