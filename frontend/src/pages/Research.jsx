@@ -239,14 +239,20 @@ function Research() {
   };
 
   const clearConversation = () => {
+    // Close any active research stream
+    if (eventSourceRef.current) {
+      eventSourceRef.current.close();
+      eventSourceRef.current = null;
+    }
+
+    // Reset all state
     setCurrentSession(null);
     setMessages([]);
     setThinkingSteps([]);
     setCurrentStatus('');
     setAwaitingClarification(false);
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
+    setIsResearching(false);
+    setResearchProgress(0);
   };
 
   const deleteSession = async (sessionId) => {
