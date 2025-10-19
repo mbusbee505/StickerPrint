@@ -104,7 +104,6 @@ function Gallery() {
             className="px-4 py-2 bg-white dark:bg-gray-700 text-gray-900 dark:text-white border border-gray-300 dark:border-gray-600 rounded focus:outline-none focus:ring-2 focus:ring-indigo-500"
           >
             <option value="all">All Jobs</option>
-            <option value="latest">Latest Job</option>
             {jobs.map((job) => (
               <option key={job.id} value={job.id}>
                 {job.prompts_file_name || `Job ${job.id}`}
