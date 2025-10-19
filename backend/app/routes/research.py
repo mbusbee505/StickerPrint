@@ -358,31 +358,59 @@ Make this research report comprehensive, specific, and immediately actionable fo
             reasoning_steps = []
             web_searches = []
 
+            # Stream each item as we process it
             for item in response.output:
+                item_dict = item.model_dump() if hasattr(item, 'model_dump') else {}
+
                 if hasattr(item, 'type'):
+                    # Reasoning/thinking events
                     if item.type == "reasoning":
-                        # Extract reasoning summary
                         if hasattr(item, 'summary'):
                             for summary_item in item.summary:
                                 if hasattr(summary_item, 'text'):
-                                    reasoning_steps.append(summary_item.text)
+                                    reasoning_text = summary_item.text
+                                    reasoning_steps.append(reasoning_text)
                                     yield {
                                         "event": "thinking",
-                                        "data": json.dumps({"text": summary_item.text})
+                                        "data": json.dumps({"text": reasoning_text})
+                                    }
+                        # Also check for content in reasoning
+                        elif hasattr(item, 'content'):
+                            for content_item in item.content:
+                                if hasattr(content_item, 'text'):
+                                    reasoning_text = content_item.text
+                                    reasoning_steps.append(reasoning_text)
+                                    yield {
+                                        "event": "thinking",
+                                        "data": json.dumps({"text": reasoning_text})
                                     }
 
+                    # Web search events
                     elif item.type == "web_search_call":
-                        # Extract web search query
                         if hasattr(item, 'action'):
-                            query = item.action.get('query', '')
-                            web_searches.append(query)
-                            yield {
-                                "event": "web_search",
-                                "data": json.dumps({"query": query})
-                            }
+                            action_dict = item.action if isinstance(item.action, dict) else {}
+                            query = action_dict.get('query', '')
+                            if query:
+                                web_searches.append(query)
+                                yield {
+                                    "event": "web_search",
+                                    "data": json.dumps({"query": query})
+                                }
 
+                    # Web search results
+                    elif item.type == "web_search_result":
+                        if hasattr(item, 'result'):
+                            result_dict = item.result if isinstance(item.result, dict) else {}
+                            url = result_dict.get('url', '')
+                            title = result_dict.get('title', '')
+                            if url:
+                                yield {
+                                    "event": "web_page",
+                                    "data": json.dumps({"url": url, "title": title or url})
+                                }
+
+                    # Final message/report
                     elif item.type == "message":
-                        # This is likely the final report
                         if hasattr(item, 'content'):
                             for content_item in item.content:
                                 if hasattr(content_item, 'text'):

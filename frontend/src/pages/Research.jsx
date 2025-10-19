@@ -11,6 +11,7 @@ function Research() {
   const [thinkingSteps, setThinkingSteps] = useState([]);
   const [currentStatus, setCurrentStatus] = useState('');
   const [awaitingClarification, setAwaitingClarification] = useState(false);
+  const [researchProgress, setResearchProgress] = useState(0);
   const messagesEndRef = useRef(null);
   const eventSourceRef = useRef(null);
 
@@ -62,18 +63,6 @@ function Research() {
     } catch (error) {
       console.error('Failed to load sessions:', error);
     }
-  };
-
-  const clearChat = () => {
-    setMessages([]);
-    setThinkingSteps([]);
-    setCurrentStatus('');
-    setAwaitingClarification(false);
-    setInputMessage('');
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-    }
-    setIsResearching(false);
   };
 
   const loadSession = async (sessionId) => {
@@ -145,6 +134,7 @@ function Research() {
     setIsResearching(true);
     setThinkingSteps([]);
     setCurrentStatus('Initializing...');
+    setResearchProgress(5);
 
     const eventSource = new EventSource(`${API_BASE}/api/research/sessions/${sessionId}/stream`);
     eventSourceRef.current = eventSource;
@@ -152,6 +142,17 @@ function Research() {
     eventSource.addEventListener('status', (e) => {
       const data = JSON.parse(e.data);
       setCurrentStatus(data.message || data.status);
+
+      // Update progress based on status
+      if (data.status === 'analyzing_query') {
+        setResearchProgress(10);
+      } else if (data.status === 'starting_research') {
+        setResearchProgress(20);
+      } else if (data.status === 'researching') {
+        setResearchProgress(30);
+      } else if (data.status === 'finalizing') {
+        setResearchProgress(90);
+      }
     });
 
     eventSource.addEventListener('clarification', (e) => {
@@ -163,17 +164,29 @@ function Research() {
     eventSource.addEventListener('thinking', (e) => {
       const data = JSON.parse(e.data);
       setThinkingSteps(prev => [...prev, { type: 'thinking', text: data.text }]);
+      // Increment progress slightly with each thinking step (cap at 85%)
+      setResearchProgress(prev => Math.min(prev + 2, 85));
     });
 
     eventSource.addEventListener('web_search', (e) => {
       const data = JSON.parse(e.data);
-      setThinkingSteps(prev => [...prev, { type: 'search', text: `Searching: ${data.query}` }]);
+      setThinkingSteps(prev => [...prev, { type: 'search', text: data.query }]);
+      // Increment progress with each search (cap at 85%)
+      setResearchProgress(prev => Math.min(prev + 3, 85));
+    });
+
+    eventSource.addEventListener('web_page', (e) => {
+      const data = JSON.parse(e.data);
+      setThinkingSteps(prev => [...prev, { type: 'page', url: data.url, text: data.title }]);
+      // Increment progress with each page view (cap at 85%)
+      setResearchProgress(prev => Math.min(prev + 2, 85));
     });
 
     eventSource.addEventListener('result', (e) => {
       const data = JSON.parse(e.data);
       setMessages(prev => [...prev, { role: 'assistant', content: data.report, created_at: new Date() }]);
       setCurrentStatus('Research completed!');
+      setResearchProgress(100);
     });
 
     eventSource.addEventListener('done', (e) => {
@@ -182,8 +195,12 @@ function Research() {
 
       if (data.status === 'awaiting_response') {
         setCurrentStatus('Awaiting your response...');
+        setResearchProgress(0);
       } else {
         setCurrentStatus('');
+        setResearchProgress(100);
+        // Reset progress after a delay
+        setTimeout(() => setResearchProgress(0), 2000);
       }
 
       eventSource.close();
@@ -271,21 +288,12 @@ function Research() {
             {currentSession ? currentSession.title : 'Research Target Demographic'}
           </h2>
           {currentSession && (
-            <div className="flex gap-2">
-              <button
-                onClick={clearChat}
-                className="px-3 py-1 text-sm bg-yellow-500 text-white rounded hover:bg-yellow-600"
-                title="Clear chat (keeps in history)"
-              >
-                Clear Chat
-              </button>
-              <button
-                onClick={clearConversation}
-                className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
-              >
-                New Research
-              </button>
-            </div>
+            <button
+              onClick={clearConversation}
+              className="px-3 py-1 text-sm bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-300 dark:hover:bg-gray-600"
+            >
+              New Research
+            </button>
           )}
         </div>
 
@@ -378,86 +386,157 @@ function Research() {
             Research Activity
           </h3>
 
-          {isResearching && (
+          {(isResearching || researchProgress > 0) && (
             <div className="mb-4">
-              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                <div className="bg-indigo-600 h-2 rounded-full animate-pulse" style={{ width: '100%' }}></div>
+              <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2.5 overflow-hidden">
+                <div
+                  className="bg-indigo-600 h-2.5 rounded-full transition-all duration-500 ease-out"
+                  style={{ width: `${researchProgress}%` }}
+                ></div>
               </div>
-              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Research in progress...</p>
+              <div className="flex items-center justify-between mt-1">
+                <p className="text-xs text-gray-600 dark:text-gray-400">
+                  {researchProgress === 100 ? 'Complete!' : 'Research in progress...'}
+                </p>
+                <p className="text-xs font-semibold text-indigo-600 dark:text-indigo-400">
+                  {researchProgress}%
+                </p>
+              </div>
             </div>
           )}
 
           <div className="flex-1 overflow-y-auto space-y-2">
-            {thinkingSteps.map((step, idx) => (
-              <div
-                key={idx}
-                className={`p-2 rounded text-sm ${
-                  step.type === 'search'
-                    ? 'bg-blue-50 dark:bg-blue-900/30 text-blue-800 dark:text-blue-200'
-                    : 'bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
-                }`}
-              >
-                {step.type === 'search' && (
-                  <span className="font-semibold mr-1">🔍</span>
-                )}
-                {step.text}
-              </div>
-            ))}
+            {thinkingSteps.length === 0 && !isResearching && (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                Research activity will appear here
+              </p>
+            )}
+            {thinkingSteps.map((step, idx) => {
+              if (step.type === 'search') {
+                return (
+                  <div key={idx} className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-800">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg flex-shrink-0">🔍</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-blue-900 dark:text-blue-100 mb-1">
+                          Web Search
+                        </div>
+                        <div className="text-sm text-blue-800 dark:text-blue-200 break-words">
+                          {step.text}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else if (step.type === 'page') {
+                return (
+                  <div key={idx} className="p-3 rounded-lg bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-800">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg flex-shrink-0">🌐</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-green-900 dark:text-green-100 mb-1">
+                          Viewing Page
+                        </div>
+                        <a
+                          href={step.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-sm text-green-800 dark:text-green-200 hover:underline break-all"
+                        >
+                          {step.text}
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                );
+              } else {
+                return (
+                  <div key={idx} className="p-3 rounded-lg bg-purple-50 dark:bg-purple-900/30 border border-purple-200 dark:border-purple-800">
+                    <div className="flex items-start gap-2">
+                      <span className="text-lg flex-shrink-0">💭</span>
+                      <div className="flex-1 min-w-0">
+                        <div className="text-xs font-semibold text-purple-900 dark:text-purple-100 mb-1">
+                          Thinking
+                        </div>
+                        <div className="text-sm text-purple-800 dark:text-purple-200 break-words">
+                          {step.text}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              }
+            })}
           </div>
         </div>
 
         {/* History Panel */}
-        <div className="h-64 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
-            Research History
-          </h3>
+        <div className="h-96 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
+          <div className="flex items-center justify-between mb-3">
+            <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
+              Research History
+            </h3>
+            <span className="text-lg font-semibold text-gray-900 dark:text-white">
+              {sessions.length}
+            </span>
+          </div>
           <div className="flex-1 overflow-y-auto space-y-2">
-            {sessions.map((session) => (
-              <div
-                key={session.id}
-                className="p-2 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600 cursor-pointer group"
-              >
-                <div className="flex items-start justify-between gap-2">
-                  <div className="flex-1" onClick={() => loadSession(session.id)}>
-                    <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
-                      {session.title}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {new Date(session.created_at).toLocaleDateString()}
-                    </div>
-                    <div className="flex items-center gap-2 mt-1">
-                      {session.has_result && (
-                        <>
-                          <span className="inline-block px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-200 rounded">
+            {sessions.length === 0 ? (
+              <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-8">
+                No research yet
+              </p>
+            ) : (
+              sessions.map((session) => (
+                <div
+                  key={session.id}
+                  className="p-3 bg-gray-50 dark:bg-gray-700 rounded hover:bg-gray-100 dark:hover:bg-gray-600"
+                >
+                  <div className="flex items-start justify-between gap-2 mb-2">
+                    <div className="flex-1" onClick={() => loadSession(session.id)} className="cursor-pointer">
+                      <div className="text-sm font-medium text-gray-900 dark:text-white truncate">
+                        {session.title}
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        {session.has_result ? (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200">
                             Completed
                           </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              downloadResult(session.id);
-                            }}
-                            className="inline-flex items-center px-2 py-0.5 text-xs bg-blue-100 dark:bg-blue-900 text-blue-800 dark:text-blue-200 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
-                            title="Download .txt"
-                          >
-                            📥 Download
-                          </button>
-                        </>
-                      )}
+                        ) : (
+                          <span className="px-2 py-0.5 text-xs font-medium rounded bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200">
+                            {session.status}
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                        {new Date(session.created_at).toLocaleString()}
+                      </div>
                     </div>
                   </div>
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      deleteSession(session.id);
-                    }}
-                    className="opacity-0 group-hover:opacity-100 text-red-600 hover:text-red-800 dark:text-red-400"
-                    title="Delete"
-                  >
-                    ✕
-                  </button>
+                  {session.has_result && (
+                    <div className="flex gap-2">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          downloadResult(session.id);
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-indigo-600 text-white text-xs rounded hover:bg-indigo-700"
+                      >
+                        Download
+                      </button>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          // Placeholder for future functionality
+                        }}
+                        className="flex-1 px-3 py-1.5 bg-green-600 text-white text-xs rounded hover:bg-green-700"
+                      >
+                        Queue
+                      </button>
+                    </div>
+                  )}
                 </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </div>
