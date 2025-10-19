@@ -5,10 +5,23 @@ import { sseClient } from '../services/sse';
 
 const PENDING_QUEUE_KEY = 'stickerprint_pending_queue';
 
+// Load initial pending files from localStorage synchronously
+const getInitialPendingFiles = () => {
+  try {
+    const savedQueue = localStorage.getItem(PENDING_QUEUE_KEY);
+    if (savedQueue) {
+      return JSON.parse(savedQueue);
+    }
+  } catch (error) {
+    console.error('Failed to parse pending queue:', error);
+  }
+  return [];
+};
+
 function Jobs() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
-  const [pendingFiles, setPendingFiles] = useState([]);
+  const [pendingFiles, setPendingFiles] = useState(getInitialPendingFiles());
   const [currentJob, setCurrentJob] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
@@ -19,48 +32,41 @@ function Jobs() {
     setToast({ type, text });
   };
 
-  // Load pending queue from localStorage on mount and verify files exist
+  // Verify pending queue against server on mount
   useEffect(() => {
-    const loadAndVerifyQueue = async () => {
-      const savedQueue = localStorage.getItem(PENDING_QUEUE_KEY);
-      if (savedQueue) {
-        try {
-          const queue = JSON.parse(savedQueue);
+    const verifyQueue = async () => {
+      if (pendingFiles.length === 0) return;
 
-          // Get all prompts files and jobs
-          const [allPromptsFiles, allJobs] = await Promise.all([
-            api.listPromptsFiles(),
-            api.listJobs()
-          ]);
+      try {
+        // Get all prompts files and jobs
+        const [allPromptsFiles, allJobs] = await Promise.all([
+          api.listPromptsFiles(),
+          api.listJobs()
+        ]);
 
-          const existingFileIds = new Set(allPromptsFiles.map(f => f.id));
-          const usedFileIds = new Set(allJobs.map(j => j.prompts_file_id));
+        const existingFileIds = new Set(allPromptsFiles.map(f => f.id));
+        const usedFileIds = new Set(allJobs.map(j => j.prompts_file_id));
 
-          // Verify each file still exists and hasn't been used
-          const verifiedQueue = [];
-          for (const file of queue) {
-            if (existingFileIds.has(file.id) && !usedFileIds.has(file.id)) {
-              verifiedQueue.push(file);
-            } else {
-              console.log(`Removed file from queue: ${file.filename} (${existingFileIds.has(file.id) ? 'already used' : 'no longer exists'})`);
-            }
+        // Verify each file still exists and hasn't been used
+        const verifiedQueue = [];
+        for (const file of pendingFiles) {
+          if (existingFileIds.has(file.id) && !usedFileIds.has(file.id)) {
+            verifiedQueue.push(file);
+          } else {
+            console.log(`Removed file from queue: ${file.filename} (${existingFileIds.has(file.id) ? 'already used' : 'no longer exists'})`);
           }
-
-          setPendingFiles(verifiedQueue);
-
-          // Update localStorage with verified queue
-          if (verifiedQueue.length !== queue.length) {
-            localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(verifiedQueue));
-          }
-        } catch (error) {
-          console.error('Failed to load pending queue:', error);
-          // Clear invalid data
-          localStorage.removeItem(PENDING_QUEUE_KEY);
         }
+
+        // Update state if queue changed
+        if (verifiedQueue.length !== pendingFiles.length) {
+          setPendingFiles(verifiedQueue);
+        }
+      } catch (error) {
+        console.error('Failed to verify pending queue:', error);
       }
     };
 
-    loadAndVerifyQueue();
+    verifyQueue();
   }, []);
 
   // Save pending queue to localStorage whenever it changes
@@ -71,6 +77,7 @@ function Jobs() {
   const loadData = async () => {
     try {
       const jobsData = await api.listJobs();
+      console.log('Loaded jobs:', jobsData);
       setJobs(jobsData);
 
       // Find current running job
@@ -214,7 +221,15 @@ function Jobs() {
     setPendingFiles(prev => prev.filter(f => f.id !== fileId));
   };
 
-  const completedJobs = jobs.filter(j => j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled');
+  // Filter completed jobs (exclude running/queued)
+  const completedJobs = jobs.filter(j => {
+    const isCompleted = j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled';
+    return isCompleted;
+  });
+
+  console.log('All jobs:', jobs);
+  console.log('Completed jobs:', completedJobs);
+  console.log('Current job:', currentJob);
 
   // Calculate progress for current job - fixed calculation
   const getJobProgress = (job) => {
