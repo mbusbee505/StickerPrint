@@ -152,8 +152,7 @@ async def analyze_images(
         image_count=len(files)
     )
     db.add(upload_record)
-    await db.commit()
-    await db.refresh(upload_record)
+    await db.flush()  # Flush to get ID without committing
 
     # Create filename based on upload ID
     filename = f"deconstruct_{upload_record.id}.txt"
@@ -163,7 +162,7 @@ async def analyze_images(
         for prompt in prompts_text:
             f.write(prompt + '\n')
 
-    # Update record with file path
+    # Set result_path before commit
     upload_record.result_path = str(filepath)
     await db.commit()
 
