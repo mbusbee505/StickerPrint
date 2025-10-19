@@ -283,26 +283,45 @@ async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
 
 @router.delete("/all")
 async def delete_all_jobs(db: AsyncSession = Depends(get_db)):
-    """Delete all jobs and their associated images"""
+    """Delete all jobs, images, and prompts files"""
     from sqlalchemy import delete
+    import os
 
-    # Delete all images first (due to foreign key constraints)
-    await db.execute(delete(Image))
-
-    # Delete all jobs
+    # Get all jobs to count and clean up files
     result = await db.execute(select(Job))
     jobs = result.scalars().all()
     job_count = len(jobs)
 
+    # Get all images to delete their files
+    result = await db.execute(select(Image))
+    images = result.scalars().all()
+    for image in images:
+        try:
+            if os.path.exists(image.path):
+                os.remove(image.path)
+        except Exception as e:
+            print(f"Failed to delete image file {image.path}: {e}")
+
+    # Delete all images from database
+    await db.execute(delete(Image))
+
+    # Delete all jobs
     await db.execute(delete(Job))
 
-    # Reset all prompts files to pending status
-    await db.execute(
-        select(PromptsFile)
-    )
-    prompts_files = (await db.execute(select(PromptsFile))).scalars().all()
+    # Get all prompts files and delete them
+    result = await db.execute(select(PromptsFile))
+    prompts_files = result.scalars().all()
+    prompts_count = len(prompts_files)
+
     for pf in prompts_files:
-        pf.status = 'pending'
+        try:
+            if os.path.exists(pf.path):
+                os.remove(pf.path)
+        except Exception as e:
+            print(f"Failed to delete prompts file {pf.path}: {e}")
+
+    # Delete all prompts files from database
+    await db.execute(delete(PromptsFile))
 
     await db.commit()
 
@@ -314,5 +333,6 @@ async def delete_all_jobs(db: AsyncSession = Depends(get_db)):
 
     return {
         "deleted_jobs": job_count,
-        "message": "All jobs deleted successfully"
+        "deleted_prompts_files": prompts_count,
+        "message": "All jobs and files deleted successfully"
     }
