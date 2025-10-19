@@ -6,11 +6,91 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-from ..database import get_db, Job, PromptsFile, Image, AppConfig
+from ..database import get_db, Job, PromptsFile, Image, AppConfig, PromptQueue, GeneratedPromptFile
 from ..services.image_generator import ImageGeneratorService
 from ..services.zip_generator import ZipGeneratorService
+import hashlib
+import shutil
 
 router = APIRouter(prefix="/api/jobs", tags=["jobs"])
+
+
+async def process_next_prompt_queue(db: AsyncSession):
+    """Helper function to process the next item in the prompt queue"""
+    # Check if there's already a PromptsFile being processed
+    existing_processing = await db.execute(
+        select(PromptsFile).where(PromptsFile.status == 'processing')
+    )
+    if existing_processing.scalar_one_or_none():
+        return False
+
+    # Get the next pending item from the queue
+    result = await db.execute(
+        select(PromptQueue)
+        .where(PromptQueue.status == 'pending')
+        .order_by(PromptQueue.queued_at.asc())
+        .limit(1)
+    )
+    queue_item = result.scalar_one_or_none()
+
+    if not queue_item:
+        return False
+
+    # Get the generated file
+    gen_file_result = await db.execute(
+        select(GeneratedPromptFile).where(GeneratedPromptFile.id == queue_item.generated_file_id)
+    )
+    generated_file = gen_file_result.scalar_one_or_none()
+
+    if not generated_file:
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        return False
+
+    source_path = Path(generated_file.path)
+    if not source_path.exists():
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        return False
+
+    # Read file content for hash calculation
+    with open(source_path, 'rb') as f:
+        content = f.read()
+
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    # Copy file to prompts directory
+    prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = int(datetime.utcnow().timestamp())
+    dest_path = prompts_dir / f"{timestamp}_{generated_file.filename}"
+
+    shutil.copy2(source_path, dest_path)
+
+    # Create PromptsFile entry
+    prompts_file = PromptsFile(
+        filename=generated_file.filename,
+        sha256=sha256,
+        uploaded_at=datetime.utcnow(),
+        path=str(dest_path),
+        status='pending'
+    )
+
+    db.add(prompts_file)
+    await db.commit()
+    await db.refresh(prompts_file)
+
+    # Update queue item
+    queue_item.status = 'completed'
+    queue_item.completed_at = datetime.utcnow()
+    queue_item.prompts_file_id = prompts_file.id
+
+    await db.commit()
+
+    return True
 
 
 class CreateJobRequest(BaseModel):
@@ -80,6 +160,9 @@ async def job_image_generation(job_id: int):
 
                 await db.commit()
 
+        # After job completes (success or failure), try to process next item in prompt queue
+        await process_next_prompt_queue(db)
+
 
 @router.post("")
 async def create_job(
@@ -131,6 +214,9 @@ async def create_job(
 
     # Start background task
     background_tasks.add_task(job_image_generation, job.id)
+
+    # Try to process next item in prompt queue (in case there are more items waiting)
+    await process_next_prompt_queue(db)
 
     return {
         "id": job.id,
@@ -264,6 +350,15 @@ async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
     # Update job status to canceled
     job.status = 'canceled'
     job.finished_at = datetime.utcnow()
+
+    # Mark prompts file as completed
+    result = await db.execute(
+        select(PromptsFile).where(PromptsFile.id == job.prompts_file_id)
+    )
+    prompts_file = result.scalar_one_or_none()
+    if prompts_file:
+        prompts_file.status = 'completed'
+
     await db.commit()
 
     # Broadcast event
@@ -273,6 +368,9 @@ async def cancel_job(job_id: int, db: AsyncSession = Depends(get_db)):
         "status": "canceled",
         "finished_at": job.finished_at.isoformat()
     })
+
+    # Try to process next item in prompt queue
+    await process_next_prompt_queue(db)
 
     return {
         "id": job.id,

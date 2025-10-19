@@ -241,6 +241,10 @@ async def queue_generated_file(
     await db.commit()
     await db.refresh(queue_item)
 
+    # Trigger auto-processing of the queue
+    from ..routes.jobs import process_next_prompt_queue
+    await process_next_prompt_queue(db)
+
     return {
         "id": queue_item.id,
         "filename": generated_file.filename,

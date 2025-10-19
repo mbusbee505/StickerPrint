@@ -23,24 +23,6 @@ function PromptGenerator() {
     }
   }, [toast]);
 
-  // Auto-process prompt queue when no PromptsFile is being processed
-  useEffect(() => {
-    const autoProcessQueue = async () => {
-      const processingFile = promptsFiles.find(f => f.status === 'processing');
-      const pendingQueueItem = promptQueue.find(q => q.status === 'pending');
-
-      if (!processingFile && pendingQueueItem) {
-        try {
-          await api.processNextPromptQueue();
-          await loadAllData();
-        } catch (error) {
-          console.error('Auto-process failed:', error);
-        }
-      }
-    };
-
-    autoProcessQueue();
-  }, [promptQueue, promptsFiles]);
 
   const loadAllData = async () => {
     try {
@@ -220,16 +202,16 @@ function PromptGenerator() {
         </div>
 
         {/* Right Panel - Queue and Previously Generated Files */}
-        <div className="w-96 bg-white dark:bg-gray-800 rounded-lg shadow overflow-hidden flex flex-col">
+        <div className="w-96 flex flex-col gap-4">
           {/* Prompt Queue Section */}
-          <div className="border-b dark:border-gray-700 p-4">
+          <div className="flex-1 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
               Prompt Queue ({promptQueue.filter(q => q.status === 'pending').length})
             </h3>
             <p className="text-xs text-gray-600 dark:text-gray-400 mb-3">
               Files will be automatically sent to the job queue one at a time.
             </p>
-            <div className="space-y-2 max-h-64 overflow-y-auto">
+            <div className="flex-1 overflow-y-auto space-y-2">
               {promptQueue.length === 0 ? (
                 <p className="text-sm text-gray-500 dark:text-gray-400 text-center py-4">
                   No items in queue
@@ -268,7 +250,7 @@ function PromptGenerator() {
           </div>
 
           {/* Previously Generated Files Section */}
-          <div className="flex-1 overflow-hidden flex flex-col p-4">
+          <div className="h-96 bg-white dark:bg-gray-800 rounded-lg shadow p-4 overflow-hidden flex flex-col">
             <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-3">
               Previously Generated Files ({generatedFiles.length})
             </h3>
