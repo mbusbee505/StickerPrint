@@ -13,6 +13,23 @@ function Jobs() {
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
 
+  const showToast = (type, text) => {
+    setToast({ type, text });
+  };
+
+  const loadData = async () => {
+    try {
+      const jobsData = await api.listJobs();
+      setJobs(jobsData);
+
+      // Find current running job
+      const runningJob = jobsData.find(j => j.status === 'running' || j.status === 'queued');
+      setCurrentJob(runningJob || null);
+    } catch (error) {
+      showToast('error', 'Failed to load data');
+    }
+  };
+
   useEffect(() => {
     loadData();
 
@@ -53,7 +70,13 @@ function Jobs() {
   // Auto-process pending files
   useEffect(() => {
     const processNextFile = async () => {
-      if (pendingFiles.length > 0 && !isProcessing && !currentJob) {
+      // Process next file only if there are pending files and no job is currently being created
+      if (pendingFiles.length > 0 && !isProcessing) {
+        // Check if there's already a running/queued job - if so, wait
+        if (currentJob && (currentJob.status === 'running' || currentJob.status === 'queued')) {
+          return;
+        }
+
         setIsProcessing(true);
         const nextFile = pendingFiles[0];
 
@@ -61,6 +84,7 @@ function Jobs() {
           await api.createJob(nextFile.id);
           setPendingFiles(prev => prev.slice(1));
           showToast('success', `Job started for ${nextFile.filename}`);
+          await loadData(); // Reload to get the new job
         } catch (error) {
           showToast('error', `Failed to start job for ${nextFile.filename}`);
         } finally {
@@ -71,23 +95,6 @@ function Jobs() {
 
     processNextFile();
   }, [pendingFiles, isProcessing, currentJob]);
-
-  const showToast = (type, text) => {
-    setToast({ type, text });
-  };
-
-  const loadData = async () => {
-    try {
-      const jobsData = await api.listJobs();
-      setJobs(jobsData);
-
-      // Find current running job
-      const runningJob = jobsData.find(j => j.status === 'running' || j.status === 'queued');
-      setCurrentJob(runningJob || null);
-    } catch (error) {
-      showToast('error', 'Failed to load data');
-    }
-  };
 
   const handleMultipleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
