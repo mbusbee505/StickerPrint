@@ -1,7 +1,5 @@
 import { useState, useEffect } from 'react';
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-
 function Deconstruct() {
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -14,7 +12,7 @@ function Deconstruct() {
 
   const loadHistory = async () => {
     try {
-      const response = await fetch(`${API_BASE}/api/deconstruct/history`);
+      const response = await fetch('/api/deconstruct/history');
       const data = await response.json();
       setHistory(data);
     } catch (error) {
@@ -40,7 +38,7 @@ function Deconstruct() {
         formData.append('files', file);
       });
 
-      const response = await fetch(`${API_BASE}/api/deconstruct/analyze`, {
+      const response = await fetch('/api/deconstruct/analyze', {
         method: 'POST',
         body: formData
       });
@@ -61,14 +59,14 @@ function Deconstruct() {
   };
 
   const downloadResult = (uploadId) => {
-    window.open(`${API_BASE}/api/deconstruct/download/${uploadId}`, '_blank');
+    window.open(`/api/deconstruct/download/${uploadId}`, '_blank');
   };
 
   const deleteUpload = async (uploadId) => {
     if (!confirm('Delete this upload?')) return;
 
     try {
-      await fetch(`${API_BASE}/api/deconstruct/history/${uploadId}`, {
+      await fetch(`/api/deconstruct/history/${uploadId}`, {
         method: 'DELETE'
       });
       loadHistory();
