@@ -325,6 +325,7 @@ async def queue_generated_file(
     db: AsyncSession = Depends(get_db)
 ):
     """Add a generated prompt file to the prompt queue"""
+    print(f"[PROMPT_QUEUE] Queue endpoint called for file_id: {file_id}")
 
     # Get the generated file
     result = await db.execute(
@@ -333,6 +334,7 @@ async def queue_generated_file(
     generated_file = result.scalar_one_or_none()
 
     if not generated_file:
+        print(f"[PROMPT_QUEUE] ERROR: Generated file {file_id} not found in database")
         raise HTTPException(status_code=404, detail="Generated file not found")
 
     source_path = Path(generated_file.path)

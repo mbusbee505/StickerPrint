@@ -51,10 +51,12 @@ function PromptGenerator() {
         api.listPromptQueue(),
         api.listPromptsFiles()
       ]);
+      console.log('[DATA] Loaded:', { files: files.length, queue: queue.length, prompts: prompts.length });
       setGeneratedFiles(files);
       setPromptQueue(queue);
       setPromptsFiles(prompts);
     } catch (error) {
+      console.error('[DATA] Load error:', error);
       showToast('error', 'Failed to load data');
     }
   };
@@ -110,7 +112,9 @@ function PromptGenerator() {
 
   const handleQueue = async (fileId, filename) => {
     try {
+      console.log('[QUEUE] Queuing file:', fileId, filename);
       const result = await api.queueGeneratedPromptFile(fileId);
+      console.log('[QUEUE] Queue result:', result);
       if (result.already_queued) {
         showToast('error', 'File already in prompt queue');
       } else {
@@ -118,6 +122,7 @@ function PromptGenerator() {
         await loadAllData();
       }
     } catch (error) {
+      console.error('[QUEUE] Error:', error);
       showToast('error', error.message || 'Failed to queue file');
     }
   };
