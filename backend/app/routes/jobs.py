@@ -17,80 +17,12 @@ router = APIRouter(prefix="/api/jobs", tags=["jobs"])
 
 async def process_next_prompt_queue(db: AsyncSession):
     """Helper function to process the next item in the prompt queue"""
-    # Check if there's already a PromptsFile being processed
-    existing_processing = await db.execute(
-        select(PromptsFile).where(PromptsFile.status == 'processing')
-    )
-    if existing_processing.scalar_one_or_none():
+    from ..routes.prompt_generator import _process_next_prompt_queue_item
+    try:
+        return await _process_next_prompt_queue_item(db)
+    except Exception as e:
+        print(f"Error processing prompt queue: {e}")
         return False
-
-    # Get the next pending item from the queue
-    result = await db.execute(
-        select(PromptQueue)
-        .where(PromptQueue.status == 'pending')
-        .order_by(PromptQueue.queued_at.asc())
-        .limit(1)
-    )
-    queue_item = result.scalar_one_or_none()
-
-    if not queue_item:
-        return False
-
-    # Get the generated file
-    gen_file_result = await db.execute(
-        select(GeneratedPromptFile).where(GeneratedPromptFile.id == queue_item.generated_file_id)
-    )
-    generated_file = gen_file_result.scalar_one_or_none()
-
-    if not generated_file:
-        # Clean up orphaned queue item
-        await db.delete(queue_item)
-        await db.commit()
-        return False
-
-    source_path = Path(generated_file.path)
-    if not source_path.exists():
-        # Clean up orphaned queue item
-        await db.delete(queue_item)
-        await db.commit()
-        return False
-
-    # Read file content for hash calculation
-    with open(source_path, 'rb') as f:
-        content = f.read()
-
-    sha256 = hashlib.sha256(content).hexdigest()
-
-    # Copy file to prompts directory
-    prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
-    prompts_dir.mkdir(parents=True, exist_ok=True)
-
-    timestamp = int(datetime.utcnow().timestamp())
-    dest_path = prompts_dir / f"{timestamp}_{generated_file.filename}"
-
-    shutil.copy2(source_path, dest_path)
-
-    # Create PromptsFile entry
-    prompts_file = PromptsFile(
-        filename=generated_file.filename,
-        sha256=sha256,
-        uploaded_at=datetime.utcnow(),
-        path=str(dest_path),
-        status='pending'
-    )
-
-    db.add(prompts_file)
-    await db.commit()
-    await db.refresh(prompts_file)
-
-    # Update queue item
-    queue_item.status = 'completed'
-    queue_item.completed_at = datetime.utcnow()
-    queue_item.prompts_file_id = prompts_file.id
-
-    await db.commit()
-
-    return True
 
 
 class CreateJobRequest(BaseModel):

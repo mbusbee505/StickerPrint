@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { api } from '../services/api';
+import { sseClient } from '../services/sse';
 
 function PromptGenerator() {
   const [userInput, setUserInput] = useState('');
@@ -11,6 +12,25 @@ function PromptGenerator() {
 
   useEffect(() => {
     loadAllData();
+
+    // Set up SSE listeners for live updates
+    const handlePromptQueueUpdated = (data) => {
+      console.log('Prompt queue updated:', data);
+      loadAllData();
+    };
+
+    const handlePromptsFileAdded = (data) => {
+      console.log('Prompts file added:', data);
+      loadAllData();
+    };
+
+    sseClient.on('prompt_queue_updated', handlePromptQueueUpdated);
+    sseClient.on('prompts_file_added', handlePromptsFileAdded);
+
+    return () => {
+      sseClient.off('prompt_queue_updated', handlePromptQueueUpdated);
+      sseClient.off('prompts_file_added', handlePromptsFileAdded);
+    };
   }, []);
 
   useEffect(() => {

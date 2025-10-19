@@ -19,6 +19,99 @@ GENERATED_PROMPTS_DIR = Path(__file__).parent.parent.parent.parent / "data" / "g
 GENERATED_PROMPTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
+async def _process_next_prompt_queue_item(db):
+    """Helper function to process the next item in the prompt queue"""
+    from ..routes.events import broadcast_event
+
+    # Check if there's already a PromptsFile being processed
+    existing_processing = await db.execute(
+        select(PromptsFile).where(PromptsFile.status == 'processing')
+    )
+    if existing_processing.scalar_one_or_none():
+        return False
+
+    # Get the next pending item from the queue
+    result = await db.execute(
+        select(PromptQueue)
+        .where(PromptQueue.status == 'pending')
+        .order_by(PromptQueue.queued_at.asc())
+        .limit(1)
+    )
+    queue_item = result.scalar_one_or_none()
+
+    if not queue_item:
+        return False
+
+    # Get the generated file
+    gen_file_result = await db.execute(
+        select(GeneratedPromptFile).where(GeneratedPromptFile.id == queue_item.generated_file_id)
+    )
+    generated_file = gen_file_result.scalar_one_or_none()
+
+    if not generated_file:
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        await broadcast_event("prompt_queue_updated", {"action": "removed", "queue_id": queue_item.id})
+        return False
+
+    source_path = Path(generated_file.path)
+    if not source_path.exists():
+        # Clean up orphaned queue item
+        await db.delete(queue_item)
+        await db.commit()
+        await broadcast_event("prompt_queue_updated", {"action": "removed", "queue_id": queue_item.id})
+        return False
+
+    # Read file content for hash calculation
+    with open(source_path, 'rb') as f:
+        content = f.read()
+
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    # Copy file to prompts directory
+    prompts_dir = Path(__file__).parent.parent.parent.parent / "data" / "prompts"
+    prompts_dir.mkdir(parents=True, exist_ok=True)
+
+    timestamp = int(datetime.utcnow().timestamp())
+    dest_path = prompts_dir / f"{timestamp}_{generated_file.filename}"
+
+    shutil.copy2(source_path, dest_path)
+
+    # Create PromptsFile entry
+    prompts_file = PromptsFile(
+        filename=generated_file.filename,
+        sha256=sha256,
+        uploaded_at=datetime.utcnow(),
+        path=str(dest_path),
+        status='pending'
+    )
+
+    db.add(prompts_file)
+    await db.commit()
+    await db.refresh(prompts_file)
+
+    # Update queue item
+    queue_item.status = 'completed'
+    queue_item.completed_at = datetime.utcnow()
+    queue_item.prompts_file_id = prompts_file.id
+
+    await db.commit()
+
+    # Broadcast events
+    await broadcast_event("prompt_queue_updated", {
+        "action": "completed",
+        "queue_id": queue_item.id,
+        "prompts_file_id": prompts_file.id
+    })
+    await broadcast_event("prompts_file_added", {
+        "prompts_file_id": prompts_file.id,
+        "filename": prompts_file.filename
+    })
+
+    return True
+
+
 class GeneratePromptsRequest(BaseModel):
     user_input: str
 
@@ -241,9 +334,19 @@ async def queue_generated_file(
     await db.commit()
     await db.refresh(queue_item)
 
-    # Trigger auto-processing of the queue
-    from ..routes.jobs import process_next_prompt_queue
-    await process_next_prompt_queue(db)
+    # Broadcast queue update event
+    from ..routes.events import broadcast_event
+    await broadcast_event("prompt_queue_updated", {
+        "action": "added",
+        "queue_id": queue_item.id,
+        "filename": generated_file.filename
+    })
+
+    # Trigger auto-processing of the queue (import here to avoid circular import)
+    try:
+        await _process_next_prompt_queue_item(db)
+    except Exception as e:
+        print(f"Error auto-processing queue: {e}")
 
     return {
         "id": queue_item.id,
@@ -306,6 +409,13 @@ async def remove_from_prompt_queue(
 
     await db.delete(queue_item)
     await db.commit()
+
+    # Broadcast event
+    from ..routes.events import broadcast_event
+    await broadcast_event("prompt_queue_updated", {
+        "action": "removed",
+        "queue_id": queue_id
+    })
 
     return {"message": "Item removed from queue"}
 
