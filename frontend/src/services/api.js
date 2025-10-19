@@ -156,4 +156,37 @@ export const api = {
     if (!response.ok) throw new Error('Failed to process queue');
     return response.json();
   },
+
+  // Delete operations
+  async deleteAllGeneratedPromptFiles() {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/files`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete generated prompt files');
+    return response.json();
+  },
+
+  async deleteAllPromptQueue() {
+    const response = await fetch(`${API_BASE_URL}/prompt-generator/queue`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete prompt queue');
+    return response.json();
+  },
+
+  async deleteAllPromptsFiles() {
+    const response = await fetch(`${API_BASE_URL}/prompts`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete prompts files');
+    return response.json();
+  },
+
+  async deleteAllResearchSessions() {
+    const response = await fetch(`${API_BASE_URL}/research/sessions`, {
+      method: 'DELETE',
+    });
+    if (!response.ok) throw new Error('Failed to delete research sessions');
+    return response.json();
+  },
 };

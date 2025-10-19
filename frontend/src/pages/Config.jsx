@@ -14,6 +14,7 @@ function Config() {
   const [saving, setSaving] = useState(false);
   const [toast, setToast] = useState(null);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [deleteAction, setDeleteAction] = useState(null);
 
   useEffect(() => {
     loadConfig();
@@ -74,9 +75,115 @@ function Config() {
     try {
       await api.deleteAllImages();
       setShowDeleteConfirm(false);
+      setDeleteAction(null);
       showToast('success', 'All images deleted successfully!');
     } catch (error) {
       showToast('error', 'Failed to delete images');
+    }
+  };
+
+  const handleDeleteGeneratedPromptFiles = async () => {
+    try {
+      await api.deleteAllGeneratedPromptFiles();
+      setShowDeleteConfirm(false);
+      setDeleteAction(null);
+      showToast('success', 'All generated prompt files deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete generated prompt files');
+    }
+  };
+
+  const handleDeletePromptQueue = async () => {
+    try {
+      await api.deleteAllPromptQueue();
+      setShowDeleteConfirm(false);
+      setDeleteAction(null);
+      showToast('success', 'All prompt queue items deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete prompt queue');
+    }
+  };
+
+  const handleDeletePromptsFiles = async () => {
+    try {
+      await api.deleteAllPromptsFiles();
+      setShowDeleteConfirm(false);
+      setDeleteAction(null);
+      showToast('success', 'All prompts files deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete prompts files');
+    }
+  };
+
+  const handleDeleteJobs = async () => {
+    try {
+      await api.deleteAllJobs();
+      setShowDeleteConfirm(false);
+      setDeleteAction(null);
+      showToast('success', 'All jobs deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete jobs');
+    }
+  };
+
+  const handleDeleteResearchHistory = async () => {
+    try {
+      await api.deleteAllResearchSessions();
+      setShowDeleteConfirm(false);
+      setDeleteAction(null);
+      showToast('success', 'All research history deleted successfully!');
+    } catch (error) {
+      showToast('error', 'Failed to delete research history');
+    }
+  };
+
+  const openDeleteConfirm = (action) => {
+    setDeleteAction(action);
+    setShowDeleteConfirm(true);
+  };
+
+  const executeDelete = () => {
+    switch (deleteAction) {
+      case 'images':
+        handleDeleteAll();
+        break;
+      case 'generated_prompts':
+        handleDeleteGeneratedPromptFiles();
+        break;
+      case 'prompt_queue':
+        handleDeletePromptQueue();
+        break;
+      case 'prompts_files':
+        handleDeletePromptsFiles();
+        break;
+      case 'jobs':
+        handleDeleteJobs();
+        break;
+      case 'research':
+        handleDeleteResearchHistory();
+        break;
+      default:
+        setShowDeleteConfirm(false);
+        setDeleteAction(null);
+    }
+  };
+
+  const getDeleteConfirmMessage = () => {
+    switch (deleteAction) {
+      case 'images':
+        return 'Are you sure you want to delete all images? This action cannot be undone.';
+      case 'generated_prompts':
+        return 'Are you sure you want to delete all saved generated prompt files? This action cannot be undone.';
+      case 'prompt_queue':
+        return 'Are you sure you want to delete all prompt queue items? This action cannot be undone.';
+      case 'prompts_files':
+        return 'Are you sure you want to delete all pending or completed prompt files? This action cannot be undone.';
+      case 'jobs':
+        return 'Are you sure you want to delete all jobs? This action cannot be undone.';
+      case 'research':
+        return 'Are you sure you want to delete all research history? This action cannot be undone.';
+      default:
+        return 'Are you sure you want to proceed? This action cannot be undone.';
     }
   };
 
@@ -205,14 +312,46 @@ function Config() {
           Danger Zone
         </h2>
         <p className="text-gray-700 dark:text-gray-300 mb-4">
-          Permanently delete all images from the gallery. This action cannot be undone.
+          Permanently delete data from the system. These actions cannot be undone.
         </p>
-        <button
-          onClick={() => setShowDeleteConfirm(true)}
-          className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
-        >
-          Delete All Images
-        </button>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <button
+            onClick={() => openDeleteConfirm('images')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete All Images
+          </button>
+          <button
+            onClick={() => openDeleteConfirm('generated_prompts')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete Generated Prompt Files
+          </button>
+          <button
+            onClick={() => openDeleteConfirm('prompt_queue')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete Prompt Queue Items
+          </button>
+          <button
+            onClick={() => openDeleteConfirm('prompts_files')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete Prompts Files
+          </button>
+          <button
+            onClick={() => openDeleteConfirm('jobs')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete All Jobs
+          </button>
+          <button
+            onClick={() => openDeleteConfirm('research')}
+            className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 text-left"
+          >
+            Delete Research History
+          </button>
+        </div>
       </div>
 
       {/* Delete Confirmation Modal */}
@@ -223,20 +362,23 @@ function Config() {
               Confirm Delete
             </h2>
             <p className="text-gray-700 dark:text-gray-300 mb-6">
-              Are you sure you want to delete all images? This action cannot be undone.
+              {getDeleteConfirmMessage()}
             </p>
             <div className="flex justify-end space-x-4">
               <button
-                onClick={() => setShowDeleteConfirm(false)}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  setDeleteAction(null);
+                }}
                 className="px-4 py-2 bg-gray-300 dark:bg-gray-600 text-gray-900 dark:text-white rounded hover:bg-gray-400"
               >
                 Cancel
               </button>
               <button
-                onClick={handleDeleteAll}
+                onClick={executeDelete}
                 className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
               >
-                Delete All
+                Delete
               </button>
             </div>
           </div>

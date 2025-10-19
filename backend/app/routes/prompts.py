@@ -86,3 +86,25 @@ async def list_prompts_files(db: AsyncSession = Depends(get_db)):
         }
         for pf in prompts_files
     ]
+
+
+@router.delete("")
+async def delete_all_prompts_files(db: AsyncSession = Depends(get_db)):
+    """Delete all uploaded prompts files"""
+    result = await db.execute(select(PromptsFile))
+    prompts_files = result.scalars().all()
+
+    deleted_count = 0
+    for pf in prompts_files:
+        # Delete physical file
+        filepath = Path(pf.path)
+        if filepath.exists():
+            filepath.unlink()
+            deleted_count += 1
+
+        # Delete database record
+        await db.delete(pf)
+
+    await db.commit()
+
+    return {"message": f"Deleted {deleted_count} prompts files"}

@@ -591,3 +591,26 @@ async def delete_session(
     await db.commit()
 
     return {"status": "deleted"}
+
+
+@router.delete("/sessions")
+async def delete_all_sessions(db: AsyncSession = Depends(get_db)):
+    """Delete all research sessions"""
+    result = await db.execute(select(ResearchSession))
+    sessions = result.scalars().all()
+
+    deleted_count = 0
+    for session in sessions:
+        # Delete result file if exists
+        if session.result_path:
+            filepath = Path(session.result_path)
+            if filepath.exists():
+                filepath.unlink()
+                deleted_count += 1
+
+        # Delete from database (cascade will handle messages)
+        await db.delete(session)
+
+    await db.commit()
+
+    return {"message": f"Deleted {deleted_count} research sessions"}

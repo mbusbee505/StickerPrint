@@ -453,3 +453,44 @@ async def remove_from_prompt_queue(
     })
 
     return {"message": "Item removed from queue"}
+
+
+@router.delete("/files")
+async def delete_all_generated_files(db: AsyncSession = Depends(get_db)):
+    """Delete all generated prompt files"""
+    result = await db.execute(select(GeneratedPromptFile))
+    files = result.scalars().all()
+
+    deleted_count = 0
+    for file_record in files:
+        # Delete physical file
+        filepath = Path(file_record.path)
+        if filepath.exists():
+            filepath.unlink()
+            deleted_count += 1
+
+        # Delete database record
+        await db.delete(file_record)
+
+    await db.commit()
+
+    return {"message": f"Deleted {deleted_count} generated prompt files"}
+
+
+@router.delete("/queue")
+async def delete_all_prompt_queue(db: AsyncSession = Depends(get_db)):
+    """Delete all items from the prompt queue"""
+    result = await db.execute(select(PromptQueue))
+    queue_items = result.scalars().all()
+
+    deleted_count = len(queue_items)
+    for item in queue_items:
+        await db.delete(item)
+
+    await db.commit()
+
+    # Broadcast event
+    from ..routes.events import broadcast_event
+    await broadcast_event("prompt_queue_updated", {"action": "cleared"})
+
+    return {"message": f"Deleted {deleted_count} items from prompt queue"}

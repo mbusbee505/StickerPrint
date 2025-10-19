@@ -315,9 +315,14 @@ function Jobs() {
       {/* Pending Files Queue */}
       {pendingFiles.length > 0 && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Pending Files ({pendingFiles.length})
-          </h2>
+          <div className="flex items-center justify-between mb-4">
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+              Pending Files
+            </h2>
+            <span className="text-xl font-semibold text-gray-900 dark:text-white">
+              {pendingFiles.length}
+            </span>
+          </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
             Files will automatically start processing when no job is running.
           </p>
@@ -347,9 +352,14 @@ function Jobs() {
 
       {/* Completed Jobs Section */}
       <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-          Completed Jobs ({completedJobs.length})
-        </h2>
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-xl font-semibold text-gray-900 dark:text-white">
+            Completed Jobs
+          </h2>
+          <span className="text-xl font-semibold text-gray-900 dark:text-white">
+            {completedJobs.length}
+          </span>
+        </div>
 
         {completedJobs.length === 0 ? (
           <p className="text-gray-600 dark:text-gray-400">No completed jobs yet</p>
