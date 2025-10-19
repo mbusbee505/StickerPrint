@@ -168,3 +168,18 @@ class ImageGeneratorService:
 
         # Mark job as succeeded
         await self.update_job_status("succeeded", datetime.utcnow())
+
+        # Mark prompts file as completed
+        from ..database import PromptsFile
+        result = await self.db.execute(
+            select(Job).where(Job.id == self.job_id)
+        )
+        job = result.scalar_one_or_none()
+        if job:
+            result = await self.db.execute(
+                select(PromptsFile).where(PromptsFile.id == job.prompts_file_id)
+            )
+            prompts_file = result.scalar_one_or_none()
+            if prompts_file:
+                prompts_file.status = 'completed'
+                await self.db.commit()

@@ -3,82 +3,28 @@ import { useNavigate } from 'react-router-dom';
 import { api } from '../services/api';
 import { sseClient } from '../services/sse';
 
-const PENDING_QUEUE_KEY = 'stickerprint_pending_queue';
-
-// Load initial pending files from localStorage synchronously
-const getInitialPendingFiles = () => {
-  try {
-    const savedQueue = localStorage.getItem(PENDING_QUEUE_KEY);
-    if (savedQueue) {
-      return JSON.parse(savedQueue);
-    }
-  } catch (error) {
-    console.error('Failed to parse pending queue:', error);
-  }
-  return [];
-};
-
 function Jobs() {
   const navigate = useNavigate();
   const [jobs, setJobs] = useState([]);
-  const [pendingFiles, setPendingFiles] = useState(getInitialPendingFiles());
+  const [promptsFiles, setPromptsFiles] = useState([]);
   const [currentJob, setCurrentJob] = useState(null);
   const [uploading, setUploading] = useState(false);
   const [toast, setToast] = useState(null);
-  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef(null);
 
   const showToast = (type, text) => {
     setToast({ type, text });
   };
 
-  // Verify pending queue against server on mount
-  useEffect(() => {
-    const verifyQueue = async () => {
-      if (pendingFiles.length === 0) return;
-
-      try {
-        // Get all prompts files and jobs
-        const [allPromptsFiles, allJobs] = await Promise.all([
-          api.listPromptsFiles(),
-          api.listJobs()
-        ]);
-
-        const existingFileIds = new Set(allPromptsFiles.map(f => f.id));
-        const usedFileIds = new Set(allJobs.map(j => j.prompts_file_id));
-
-        // Verify each file still exists and hasn't been used
-        const verifiedQueue = [];
-        for (const file of pendingFiles) {
-          if (existingFileIds.has(file.id) && !usedFileIds.has(file.id)) {
-            verifiedQueue.push(file);
-          } else {
-            console.log(`Removed file from queue: ${file.filename} (${existingFileIds.has(file.id) ? 'already used' : 'no longer exists'})`);
-          }
-        }
-
-        // Update state if queue changed
-        if (verifiedQueue.length !== pendingFiles.length) {
-          setPendingFiles(verifiedQueue);
-        }
-      } catch (error) {
-        console.error('Failed to verify pending queue:', error);
-      }
-    };
-
-    verifyQueue();
-  }, []);
-
-  // Save pending queue to localStorage whenever it changes
-  useEffect(() => {
-    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(pendingFiles));
-  }, [pendingFiles]);
-
   const loadData = async () => {
     try {
-      const jobsData = await api.listJobs();
-      console.log('Loaded jobs:', jobsData);
+      const [jobsData, filesData] = await Promise.all([
+        api.listJobs(),
+        api.listPromptsFiles()
+      ]);
+
       setJobs(jobsData);
+      setPromptsFiles(filesData);
 
       // Find current running job
       const runningJob = jobsData.find(j => j.status === 'running' || j.status === 'queued');
@@ -93,11 +39,11 @@ function Jobs() {
 
     // Handle real-time updates via SSE
     const handleJobUpdate = (data) => {
-      loadData(); // Reload all jobs when any job updates
+      loadData();
     };
 
     const handleImageCreated = (data) => {
-      loadData(); // Reload to update image counts and progress
+      loadData();
     };
 
     const handleZipReady = (data) => {
@@ -125,57 +71,20 @@ function Jobs() {
     }
   }, [toast]);
 
-  // Auto-process pending files
-  useEffect(() => {
-    const processNextFile = async () => {
-      // Process next file only if there are pending files and no job is currently being created
-      if (pendingFiles.length > 0 && !isProcessing) {
-        // Check if there's already a running/queued job - if so, wait
-        if (currentJob && (currentJob.status === 'running' || currentJob.status === 'queued')) {
-          return;
-        }
-
-        setIsProcessing(true);
-        const nextFile = pendingFiles[0];
-
-        try {
-          await api.createJob(nextFile.id);
-          setPendingFiles(prev => prev.slice(1));
-          showToast('success', `Job started for ${nextFile.filename}`);
-          await loadData(); // Reload to get the new job
-        } catch (error) {
-          showToast('error', `Failed to start job for ${nextFile.filename}`);
-        } finally {
-          setIsProcessing(false);
-        }
-      }
-    };
-
-    processNextFile();
-  }, [pendingFiles, isProcessing, currentJob]);
-
-  const handleFileSelect = (event) => {
-    const file = fileInputRef.current?.files?.[0];
-    if (file) {
-      handleMultipleFileUpload(event);
-    }
-  };
-
   const handleMultipleFileUpload = async (event) => {
     const files = Array.from(event.target.files);
     if (files.length === 0) return;
 
     setUploading(true);
-    const uploadedFiles = [];
+    let successCount = 0;
 
     try {
       for (const file of files) {
-        const result = await api.uploadPromptsFile(file);
-        uploadedFiles.push(result);
+        await api.uploadPromptsFile(file);
+        successCount++;
       }
 
-      setPendingFiles(prev => [...prev, ...uploadedFiles]);
-      showToast('success', `Uploaded ${uploadedFiles.length} file(s) successfully!`);
+      showToast('success', `Uploaded ${successCount} file(s) successfully!`);
       await loadData();
 
       // Reset file input
@@ -186,6 +95,16 @@ function Jobs() {
       showToast('error', 'Upload failed');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const handleStartJob = async (fileId) => {
+    try {
+      await api.createJob(fileId);
+      showToast('success', 'Job started successfully!');
+      await loadData();
+    } catch (error) {
+      showToast('error', error.message || 'Failed to start job');
     }
   };
 
@@ -217,21 +136,24 @@ function Jobs() {
     );
   };
 
-  const removePendingFile = (fileId) => {
-    setPendingFiles(prev => prev.filter(f => f.id !== fileId));
+  const getFileStatusBadge = (status) => {
+    const colors = {
+      pending: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
+      processing: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      completed: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+    };
+
+    return (
+      <span className={`px-2 py-1 text-xs font-medium rounded ${colors[status] || colors.pending}`}>
+        {status}
+      </span>
+    );
   };
 
-  // Filter completed jobs (exclude running/queued)
-  const completedJobs = jobs.filter(j => {
-    const isCompleted = j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled';
-    return isCompleted;
-  });
+  const completedJobs = jobs.filter(j => j.status === 'succeeded' || j.status === 'failed' || j.status === 'canceled');
+  const pendingFiles = promptsFiles.filter(f => f.status === 'pending');
 
-  console.log('All jobs:', jobs);
-  console.log('Completed jobs:', completedJobs);
-  console.log('Current job:', currentJob);
-
-  // Calculate progress for current job - fixed calculation
+  // Calculate progress for current job
   const getJobProgress = (job) => {
     if (!job) return 0;
     if (job.status === 'succeeded') return 100;
@@ -242,7 +164,6 @@ function Jobs() {
       return Math.round((job.image_count / job.total_prompts) * 100);
     }
 
-    // Fallback if total_prompts not available
     return Math.min(95, job.image_count * 10);
   };
 
@@ -357,11 +278,11 @@ function Jobs() {
         </div>
       )}
 
-      {/* Pending Jobs Queue */}
+      {/* Pending Files Queue */}
       {pendingFiles.length > 0 && (
         <div className="bg-white dark:bg-gray-800 shadow rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold text-gray-900 dark:text-white mb-4">
-            Pending Jobs ({pendingFiles.length})
+            Pending Files ({pendingFiles.length})
           </h2>
 
           <div className="space-y-2">
@@ -375,15 +296,20 @@ function Jobs() {
                     {file.filename}
                   </p>
                   <p className="text-xs text-gray-600 dark:text-gray-400">
-                    {file.lines} prompts
+                    Uploaded {new Date(file.uploaded_at).toLocaleString()}
                   </p>
                 </div>
-                <button
-                  onClick={() => removePendingFile(file.id)}
-                  className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300"
-                >
-                  Remove
-                </button>
+                <div className="flex items-center space-x-2">
+                  {getFileStatusBadge(file.status)}
+                  {!currentJob && (
+                    <button
+                      onClick={() => handleStartJob(file.id)}
+                      className="px-3 py-1 bg-indigo-600 text-white text-sm rounded hover:bg-indigo-700"
+                    >
+                      Start Job
+                    </button>
+                  )}
+                </div>
               </div>
             ))}
           </div>

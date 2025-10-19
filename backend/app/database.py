@@ -30,6 +30,7 @@ class PromptsFile(Base):
     sha256 = Column(String, nullable=False)
     uploaded_at = Column(DateTime, default=datetime.utcnow)
     path = Column(String, nullable=False)
+    status = Column(String, default='pending')  # pending, processing, completed
 
     jobs = relationship("Job", back_populates="prompts_file")
 

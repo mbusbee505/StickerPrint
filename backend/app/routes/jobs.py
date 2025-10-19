@@ -62,12 +62,23 @@ async def job_image_generation(job_id: int):
 
         except Exception as e:
             print(f"Error generating images: {str(e)}")
-            await db.execute(
+            result = await db.execute(
                 select(Job).where(Job.id == job_id)
             )
-            job.status = "failed"
-            job.finished_at = datetime.utcnow()
-            await db.commit()
+            job = result.scalar_one_or_none()
+            if job:
+                job.status = "failed"
+                job.finished_at = datetime.utcnow()
+
+                # Mark prompts file as completed
+                result = await db.execute(
+                    select(PromptsFile).where(PromptsFile.id == job.prompts_file_id)
+                )
+                prompts_file = result.scalar_one_or_none()
+                if prompts_file:
+                    prompts_file.status = 'completed'
+
+                await db.commit()
 
 
 @router.post("")
@@ -85,6 +96,13 @@ async def create_job(
 
     if not prompts_file:
         raise HTTPException(status_code=404, detail="Prompts file not found")
+
+    # Check if this prompts file already has a job
+    existing_job = await db.execute(
+        select(Job).where(Job.prompts_file_id == request.prompts_file_id)
+    )
+    if existing_job.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="Job already exists for this prompts file")
 
     # Get current config snapshot
     result = await db.execute(
@@ -104,6 +122,10 @@ async def create_job(
     )
 
     db.add(job)
+
+    # Mark prompts file as processing
+    prompts_file.status = 'processing'
+
     await db.commit()
     await db.refresh(job)
 

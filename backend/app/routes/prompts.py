@@ -81,7 +81,8 @@ async def list_prompts_files(db: AsyncSession = Depends(get_db)):
             "filename": pf.filename,
             "uploaded_at": pf.uploaded_at.isoformat(),
             "sha256": pf.sha256,
-            "path": pf.path
+            "path": pf.path,
+            "status": pf.status
         }
         for pf in prompts_files
     ]
