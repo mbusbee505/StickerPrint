@@ -9,9 +9,10 @@ echo "🎨 Starting StickerPrint..."
 echo ""
 
 # Check if backend venv exists
-if [ ! -d "backend/venv" ]; then
-    echo "⚠️  Backend virtual environment not found. Creating it..."
+if [ ! -d "backend/venv" ] || [ ! -f "backend/venv/bin/uvicorn" ]; then
+    echo "⚠️  Backend virtual environment not found or incomplete. Creating it..."
     cd backend
+    rm -rf venv
     python3 -m venv venv
     if [ $? -ne 0 ]; then
         echo "❌ Failed to create virtual environment. Please install python3-venv:"
@@ -19,6 +20,8 @@ if [ ! -d "backend/venv" ]; then
         echo "   sudo yum install python3-venv  # CentOS/RHEL"
         exit 1
     fi
+    echo "Installing dependencies..."
+    ./venv/bin/pip install --upgrade pip > /dev/null
     ./venv/bin/pip install -r requirements.txt
     cd ..
     echo "✅ Backend setup complete"

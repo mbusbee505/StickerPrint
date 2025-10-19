@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+  <defs>
+    <linearGradient id="stickerGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#8B5CF6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#EC4899;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.3"/>
+    </filter>
+  </defs>
+
+  <!-- Sticker base with curl -->
+  <path d="M 15 15 L 85 15 L 85 70 L 70 85 L 15 85 Z"
+        fill="url(#stickerGradient)"
+        filter="url(#shadow)"/>
+
+  <!-- Curl/peel effect -->
+  <path d="M 70 85 L 85 70 L 85 85 Z"
+        fill="#fff"
+        opacity="0.3"/>
+
+  <!-- Shine effect -->
+  <ellipse cx="35" cy="30" rx="20" ry="15"
+           fill="#fff"
+           opacity="0.2"/>
+
+  <!-- Star decoration -->
+  <path d="M 50 35 L 53 44 L 62 44 L 55 49 L 58 58 L 50 53 L 42 58 L 45 49 L 38 44 L 47 44 Z"
+        fill="#fff"
+        opacity="0.9"/>
+</svg>
