@@ -119,11 +119,11 @@ function Gallery() {
   };
 
   const sanitizeFilename = (text) => {
-    // Remove or replace invalid filename characters
+    // Remove or replace invalid filename characters, keep the prompt intact
     return text
-      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Remove invalid chars
-      .replace(/\s+/g, '_') // Replace spaces with underscores
-      .substring(0, 100) // Limit length
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Remove invalid chars including quotes
+      .replace(/\s+/g, ' ') // Keep single spaces
+      .substring(0, 200) // Increased limit to capture full prompt
       .trim();
   };
 
@@ -135,9 +135,7 @@ function Gallery() {
       const link = document.createElement('a');
       link.href = url;
 
-      // Get file extension from original URL
-      const extension = imageUrl.split('.').pop().split('?')[0] || 'png';
-      const filename = `${sanitizeFilename(promptText)}.${extension}`;
+      const filename = `${sanitizeFilename(promptText)}.png`;
 
       link.download = filename;
       document.body.appendChild(link);
