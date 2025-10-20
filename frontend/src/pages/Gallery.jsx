@@ -118,6 +118,37 @@ function Gallery() {
     }
   };
 
+  const sanitizeFilename = (text) => {
+    // Remove or replace invalid filename characters
+    return text
+      .replace(/[<>:"/\\|?*\x00-\x1F]/g, '') // Remove invalid chars
+      .replace(/\s+/g, '_') // Replace spaces with underscores
+      .substring(0, 100) // Limit length
+      .trim();
+  };
+
+  const handleDownload = async (imageUrl, promptText) => {
+    try {
+      const response = await fetch(imageUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+
+      // Get file extension from original URL
+      const extension = imageUrl.split('.').pop().split('?')[0] || 'png';
+      const filename = `${sanitizeFilename(promptText)}.${extension}`;
+
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      showToast('error', 'Failed to download image');
+    }
+  };
+
   // Infinite scroll observer
   useEffect(() => {
     const currentTarget = observerTarget.current;
@@ -228,13 +259,12 @@ function Gallery() {
                     <p className="text-white text-sm overflow-y-auto">
                       {image.prompt_text}
                     </p>
-                    <a
-                      href={image.url}
-                      download
+                    <button
+                      onClick={() => handleDownload(image.url, image.prompt_text)}
                       className="mt-2 px-3 py-1 bg-white text-black rounded text-sm text-center hover:bg-gray-200"
                     >
                       Download
-                    </a>
+                    </button>
                   </div>
                 )}
               </div>
