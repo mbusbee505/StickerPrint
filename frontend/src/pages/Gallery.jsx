@@ -65,8 +65,8 @@ function Gallery() {
     setToast({ type, text });
   };
 
-  const loadImages = async (pageNum = page, reset = false) => {
-    if (!reset && !hasMore) return;
+  const loadImages = useCallback(async (pageNum, reset = false) => {
+    if (!reset && (!hasMore || loadingMore)) return;
 
     try {
       if (reset) {
@@ -84,7 +84,12 @@ function Gallery() {
       if (reset) {
         setImages(data);
       } else {
-        setImages(prev => [...prev, ...data]);
+        setImages(prev => {
+          // Prevent duplicates by checking if images already exist
+          const existingIds = new Set(prev.map(img => img.id));
+          const newImages = data.filter(img => !existingIds.has(img.id));
+          return [...prev, ...newImages];
+        });
       }
     } catch (error) {
       showToast('error', 'Failed to load images');
@@ -92,7 +97,7 @@ function Gallery() {
       setLoading(false);
       setLoadingMore(false);
     }
-  };
+  }, [jobId, hasMore, loadingMore]);
 
   const loadJobs = async () => {
     try {
@@ -115,29 +120,29 @@ function Gallery() {
 
   // Infinite scroll observer
   useEffect(() => {
+    const currentTarget = observerTarget.current;
+
     const observer = new IntersectionObserver(
       entries => {
         if (entries[0].isIntersecting && hasMore && !loading && !loadingMore) {
-          setPage(prev => {
-            const nextPage = prev + 1;
-            loadImages(nextPage, false);
-            return nextPage;
-          });
+          const nextPage = page + 1;
+          setPage(nextPage);
+          loadImages(nextPage, false);
         }
       },
       { threshold: 0.1 }
     );
 
-    if (observerTarget.current) {
-      observer.observe(observerTarget.current);
+    if (currentTarget) {
+      observer.observe(currentTarget);
     }
 
     return () => {
-      if (observerTarget.current) {
-        observer.unobserve(observerTarget.current);
+      if (currentTarget) {
+        observer.unobserve(currentTarget);
       }
     };
-  }, [hasMore, loading, loadingMore]);
+  }, [hasMore, loading, loadingMore, page, loadImages]);
 
   if (loading) {
     return (
