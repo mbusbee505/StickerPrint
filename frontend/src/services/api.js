@@ -107,11 +107,11 @@ export const api = {
   },
 
   // Prompt Generator
-  async generatePrompts(userInput) {
+  async generatePrompts(userInput, promptCount = 100) {
     const response = await fetch(`${API_BASE_URL}/prompt-generator/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ user_input: userInput }),
+      body: JSON.stringify({ user_input: userInput, prompt_count: promptCount }),
     });
     if (!response.ok) throw new Error('Failed to generate prompts');
     return response.json();

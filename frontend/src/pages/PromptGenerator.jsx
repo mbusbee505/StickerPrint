@@ -4,6 +4,7 @@ import { sseClient } from '../services/sse';
 
 function PromptGenerator() {
   const [userInput, setUserInput] = useState('');
+  const [promptCount, setPromptCount] = useState(100);
   const [generatedFiles, setGeneratedFiles] = useState([]);
   const [promptQueue, setPromptQueue] = useState([]);
   const [promptsFiles, setPromptsFiles] = useState([]);
@@ -95,7 +96,7 @@ function PromptGenerator() {
     setLoading(true);
 
     try {
-      const result = await api.generatePrompts(userInput);
+      const result = await api.generatePrompts(userInput, promptCount);
       showToast('success', `Generated ${result.prompt_count} prompts!`);
 
       // Automatically download the file
@@ -272,10 +273,28 @@ function PromptGenerator() {
             {/* Main Content */}
             <div className="flex-1 overflow-y-auto p-4">
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                Enter demographic research or description of your target audience. The AI will generate 100 unique sticker design prompts.
+                Enter demographic research or description of your target audience. The AI will generate unique sticker design prompts.
               </p>
 
               <form onSubmit={handleGenerate}>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                    Number of Prompts
+                  </label>
+                  <select
+                    value={promptCount}
+                    onChange={(e) => setPromptCount(Number(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    disabled={loading}
+                  >
+                    <option value={1}>1</option>
+                    <option value={5}>5</option>
+                    <option value={10}>10</option>
+                    <option value={25}>25</option>
+                    <option value={100}>100</option>
+                  </select>
+                </div>
+
                 <div className="mb-4">
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Demographic Research / Audience Description
@@ -295,7 +314,7 @@ function PromptGenerator() {
                   disabled={loading || !userInput.trim()}
                   className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
                 >
-                  {loading ? 'Generating Prompts...' : 'Generate 100 Prompts'}
+                  {loading ? 'Generating Prompts...' : `Generate ${promptCount} Prompts`}
                 </button>
               </form>
 
