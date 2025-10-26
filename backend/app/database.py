@@ -187,7 +187,7 @@ async def init_db():
 {USER_INPUT}
 
 === OBJECTIVE ===
-From the demographic research above, produce a list of exactly 100 distinct sticker design prompts tailored to that audience. Each prompt must be optimized for gpt-image-1 image generation and must clearly instruct a **sticker-ready PNG** with a **Transparent Background**. End EVERY prompt with the exact sentence: **Transparent Background.**
+From the demographic research above, produce a list of exactly {PROMPT_COUNT} distinct sticker design prompts tailored to that audience. Each prompt must be optimized for gpt-image-1 image generation and must clearly instruct a **sticker-ready PNG** with a **Transparent Background**. End EVERY prompt with the exact sentence: **Transparent Background.**
 
 === CREATIVE DIRECTION & CONSTRAINTS ===
 - Audience-first: Extract 4–6 key themes (age, subcultures, hobbies, aesthetics, locales, values, inside jokes). Use them to drive concept choices.
@@ -199,7 +199,7 @@ From the demographic research above, produce a list of exactly 100 distinct stic
   • Avoid small text/logos; if text is essential for the audience, use 1–2 short, bold words max.
   • No watermarks, no brand trademarks, no copyrighted logos.
   • Lighting/style is explicit (e.g., "bold vector," "cel-shaded," "hand-inked," "glossy vinyl shine," "halftone comic," "paper-cut collage," "neon synthwave," "folk woodcut," "bioluminescent watercolor").
-- Variety requirements across the 100:
+- Variety requirements across the {PROMPT_COUNT}:
   • Cover at least 6 different style families (e.g., vector flat, inky linework, painterly watercolor, retro halftone, low-poly, paper-cut, cyberpunk glow, kawaii chibi, minimal geometric, botanical scientific).
   • Vary mood across witty, wholesome, darkly whimsical, scientific, aspirational, nostalgic, eco-forward, techy.
   • Include a spread of color strategies: limited two-tone, duotone neon, muted earth, monochrome line art, candy brights.
@@ -212,25 +212,25 @@ From the demographic research above, produce a list of exactly 100 distinct stic
   • "Transparent Background." (exact trailing period required)
 
 === FORMAT RULES ===
-- Output as a numbered list 1–100.
+- Output as a numbered list 1–{PROMPT_COUNT}.
 - Each item is ONE single-sentence prompt (can use commas/clauses) focused on a single design concept.
-- Do not include explanations, preludes, or bullet points—only the 100 prompts.
+- Do not include explanations, preludes, or bullet points—only the {PROMPT_COUNT} prompts.
 - Each prompt must end with the exact phrase: Transparent Background.
 
 === EXAMPLES OF GOOD PROMPT SHAPE (DO NOT REUSE CONTENT) ===
 - "Hand-inked botanical of {regional plant} with scientific micro-annotations turned into visual motifs, bold contour, limited two-tone deep green + cream, matte grain, sticker-ready PNG, Transparent Background."
 - "Playful isometric {audience hobby object} exploded into labeled modules with kawaii micro-faces, candy brights, cel-shaded highlights, clean die-cut silhouette, sticker-ready PNG, Transparent Background."
-(These are formatting examples only; your 100 must be fully tailored to the research.)
+(These are formatting examples only; your {PROMPT_COUNT} must be fully tailored to the research.)
 
 === GENERATION STEPS (THINK, THEN WRITE): ===
 1) Parse the research; list 4–6 core audience themes (do this silently, no output).
-2) Map each theme to 3–5 visual metaphors; pick the 100 strongest, ensuring style and color diversity (do this silently).
-3) Write the 100 prompts following FORMAT RULES, with gpt-image-1 friendly detail, **each ending with "Transparent Background."** Ensure "sticker-ready PNG" appears in each prompt.
+2) Map each theme to 3–5 visual metaphors; pick the {PROMPT_COUNT} strongest, ensuring style and color diversity (do this silently).
+3) Write the {PROMPT_COUNT} prompts following FORMAT RULES, with gpt-image-1 friendly detail, **each ending with "Transparent Background."** Ensure "sticker-ready PNG" appears in each prompt.
 
 === QUALITY CHECK BEFORE FINALIZING ===
 - Every prompt: single concept, die-cut-friendly silhouette, no tiny text, no brands/logos, contains "sticker-ready PNG," and ends with "Transparent Background."
 - No duplicates in theme or composition; each is audience-relevant and factually correct.
-- Final output: only the 100 numbered prompts."""
+- Final output: only the {PROMPT_COUNT} numbered prompts."""
                 session.add(AppConfig(key="prompt_designer_template", value=default_template))
 
             await session.commit()

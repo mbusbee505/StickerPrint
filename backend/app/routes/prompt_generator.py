@@ -124,6 +124,7 @@ async def _process_next_prompt_queue_item(db):
 
 class GeneratePromptsRequest(BaseModel):
     user_input: str
+    prompt_count: int = 100
 
 
 class GeneratedPromptFileResponse(BaseModel):
@@ -158,8 +159,9 @@ async def generate_prompts(
     if not template:
         raise HTTPException(status_code=400, detail="Prompt designer template not configured")
 
-    # Replace {USER_INPUT} in template
+    # Replace {USER_INPUT} and {PROMPT_COUNT} in template
     prompt = template.replace('{USER_INPUT}', request.user_input)
+    prompt = prompt.replace('{PROMPT_COUNT}', str(request.prompt_count))
 
     try:
         # Step 1: Generate a descriptive filename using GPT-4o
@@ -218,10 +220,12 @@ Filename:"""
                 if prompt_text:
                     prompts.append(prompt_text)
 
-        if len(prompts) < 50:
+        # Validate we got at least 50% of requested prompts
+        min_expected = max(1, request.prompt_count // 2)
+        if len(prompts) < min_expected:
             raise HTTPException(
                 status_code=500,
-                detail=f"Generated only {len(prompts)} prompts, expected around 100"
+                detail=f"Generated only {len(prompts)} prompts, expected around {request.prompt_count}"
             )
 
         # Write prompts to file

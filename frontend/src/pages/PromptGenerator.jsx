@@ -99,15 +99,6 @@ function PromptGenerator() {
       const result = await api.generatePrompts(userInput, promptCount);
       showToast('success', `Generated ${result.prompt_count} prompts!`);
 
-      // Automatically download the file
-      const downloadUrl = api.getGeneratedPromptFileUrl(result.id);
-      const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = result.filename;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
       // Reload data
       await loadAllData();
 
