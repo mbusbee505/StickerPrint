@@ -268,6 +268,13 @@ function PromptGenerator() {
               <h2 className="text-xl font-bold text-gray-900 dark:text-white">
                 From Text
               </h2>
+              <button
+                onClick={handleGenerate}
+                disabled={loading || !userInput.trim()}
+                className="px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                {loading ? 'Generating...' : 'Generate'}
+              </button>
             </div>
 
             {/* Main Content */}
@@ -276,47 +283,37 @@ function PromptGenerator() {
                 Enter demographic research or description of your target audience. The AI will generate unique sticker design prompts.
               </p>
 
-              <form onSubmit={handleGenerate}>
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Number of Prompts
-                  </label>
-                  <select
-                    value={promptCount}
-                    onChange={(e) => setPromptCount(Number(e.target.value))}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    disabled={loading}
-                  >
-                    <option value={1}>1</option>
-                    <option value={5}>5</option>
-                    <option value={10}>10</option>
-                    <option value={25}>25</option>
-                    <option value={100}>100</option>
-                  </select>
-                </div>
-
-                <div className="mb-4">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Demographic Research / Audience Description
-                  </label>
-                  <textarea
-                    value={userInput}
-                    onChange={(e) => setUserInput(e.target.value)}
-                    rows={8}
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
-                    placeholder="Describe your target audience, their interests, demographics, cultural references, hobbies, etc..."
-                    disabled={loading}
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={loading || !userInput.trim()}
-                  className="w-full sm:w-auto px-6 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Number of Prompts
+                </label>
+                <select
+                  value={promptCount}
+                  onChange={(e) => setPromptCount(Number(e.target.value))}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  disabled={loading}
                 >
-                  {loading ? 'Generating Prompts...' : `Generate ${promptCount} Prompts`}
-                </button>
-              </form>
+                  <option value={1}>1</option>
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={25}>25</option>
+                  <option value={100}>100</option>
+                </select>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                  Demographic Research / Audience Description
+                </label>
+                <textarea
+                  value={userInput}
+                  onChange={(e) => setUserInput(e.target.value)}
+                  rows={8}
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-700 text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="Describe your target audience, their interests, demographics, cultural references, hobbies, etc..."
+                  disabled={loading}
+                />
+              </div>
 
               {loading && (
                 <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900 rounded">
